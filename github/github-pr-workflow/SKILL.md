@@ -935,6 +935,7 @@ For complete repository management (branch protection, secrets, gists, feature e
 | **PR branch rebase after fork sync** | `references/pr-branch-rebase-after-fork-sync.md` — rebase local main → rebase PR branch onto it → force-push branch (NOT main) to fork; "diff is byte-identical when no upstream commit touched the same files" property; pre-flight "verify fork health before opening PR" |
 | Check out someone's PR | `gh pr checkout N` | `git fetch origin pull/N/head:pr-N && git checkout pr-N` |
 | New repo, first PR traps | `references/new-repo-first-pr.md` — README persists trap, default branch trap, verify clean extraction |
+| Backing up a directory | `references/backup-directory-to-new-repo.md` — content-backup pattern (vs. feature extraction), `gh repo view` modal trap, hidden state files in "plain" dirs, privacy scan, README template |
 | PyPI publishing | `references/***.md` — build, upload, verify, and lockfile traps |
 | Repo health monitoring | `references/benclawbot-repo-health.md` — 3-script system for all 29 benclawbot repos: PR digest, project health, single-repo deep dive |
 | Fast multi-repo `gh` scripts | `references/github-script-optimization.md` — `gh_cached` 5-min disk cache + `ThreadPoolExecutor` 8-worker parallelization (29 repos in 5.3s vs 30s sequential) |
