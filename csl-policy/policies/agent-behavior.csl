@@ -1,0 +1,52 @@
+// agent-behavior.csl -- Cron creation, delegation, skill frontmatter
+CONFIG {
+  ENFORCEMENT_MODE: BLOCK
+  CHECK_LOGICAL_CONSISTENCY: TRUE
+}
+
+DOMAIN CronCreation {
+  VARIABLES {
+    tool: {"cronjob"}
+    action: {"create", "update"}
+    has_prompt: {"TRUE", "FALSE"}
+    has_repeat_on_create: {"TRUE", "FALSE"}
+    delivery_set: {"TRUE", "FALSE"}
+  }
+
+  STATE_CONSTRAINT cron_create_requires_prompt {
+    WHEN tool == "cronjob" AND action == "create"
+    THEN has_prompt == "TRUE"
+  }
+
+  STATE_CONSTRAINT no_repeat_on_cron_create {
+    WHEN tool == "cronjob" AND action == "create"
+    THEN has_repeat_on_create == "FALSE"
+  }
+
+}
+
+DOMAIN DelegationScope {
+  VARIABLES {
+    tool: {"delegate_task"}
+    has_scope: {"TRUE", "FALSE"}
+  }
+
+  STATE_CONSTRAINT delegation_requires_scope {
+    WHEN tool == "delegate_task"
+    THEN has_scope == "TRUE"
+  }
+}
+
+DOMAIN SkillCreation {
+  VARIABLES {
+    tool: {"skill_manage"}
+    action: {"create"}
+    has_name: {"TRUE", "FALSE"}
+    has_description: {"TRUE", "FALSE"}
+  }
+
+  STATE_CONSTRAINT skill_create_requires_frontmatter {
+    WHEN tool == "skill_manage" AND action == "create"
+    THEN has_name == "TRUE" AND has_description == "TRUE"
+  }
+}

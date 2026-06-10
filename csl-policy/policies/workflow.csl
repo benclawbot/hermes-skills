@@ -1,0 +1,30 @@
+// workflow.csl -- Delivery defaults, plan enforcement, skill authoring
+CONFIG {
+  ENFORCEMENT_MODE: BLOCK
+  CHECK_LOGICAL_CONSISTENCY: TRUE
+}
+
+DOMAIN PlanModeEnforcement {
+  VARIABLES {
+    using_plan_mode: {"TRUE", "FALSE"}
+    plan_file_exists: {"TRUE", "FALSE"}
+  }
+
+  STATE_CONSTRAINT plan_file_required {
+    WHEN using_plan_mode == "TRUE"
+    THEN plan_file_exists == "TRUE"
+  }
+}
+
+DOMAIN SkillAuthoring {
+  VARIABLES {
+    tool: {"skill_manage"}
+    action: {"create"}
+    frontmatter_valid: {"TRUE", "FALSE"}
+  }
+
+  STATE_CONSTRAINT skill_frontmatter_valid {
+    WHEN tool == "skill_manage" AND action == "create"
+    THEN frontmatter_valid == "TRUE"
+  }
+}

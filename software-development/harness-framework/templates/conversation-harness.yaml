@@ -1,0 +1,97 @@
+# Conversation Harness Example - Customer Support Bot
+
+name: customer-support-harness
+version: 1.0.0
+description: "Tests customer support bot responses to common inquiries"
+harness_type: conversation
+hermes_requires: ">=0.13.0"
+author: "Hermes Team"
+license: "MIT"
+
+inputs:
+  - name: test_scenarios
+    description: "Customer support scenarios to test"
+    required: true
+    type: array
+    item_type: object
+
+outputs:
+  - name: evaluation_results
+    description: "Bot performance evaluation"
+    required: true
+    type: object
+
+test_scenarios:
+  - scenario: "refund_request"
+    description: "Customer requesting a refund"
+    prompts:
+      - "I want to refund my purchase from last week"
+      - "The product arrived damaged and I want my money back"
+    expected_tools: ["order_lookup", "refund_process"]
+    success_criteria:
+      must_show_empathy: true
+      must_offer_solution: true
+      max_response_time: 10
+    category: sensitive
+
+  - scenario: "technical_support"
+    description: "Customer having login issues"
+    prompts:
+      - "I can't log into my account"
+      - "Password reset isn't working for me"
+    expected_tools: ["account_lookup", "password_reset"]
+    success_criteria:
+      must_verify_identity: true
+      must_provide_clear_steps: true
+      max_response_time: 15
+
+  - scenario: "product_inquiry"
+    description: "Customer asking about product features"
+    prompts:
+      - "What features does your Pro plan include?"
+      - "Can you compare your Basic and Premium tiers?"
+    expected_tools: ["product_catalog", "pricing_info"]
+    success_criteria:
+      must_provide_accurate_info: true
+      must_be_concise: true
+      max_response_time: 5
+
+  - scenario: "billing_question"
+    description: "Customer with billing inquiry"
+    prompts:
+      - "I was charged twice this month"
+      - "Can you explain this charge on my bill?"
+    expected_tools: ["billing_lookup", "dispute_process"]
+    success_criteria:
+      must_verify_charges: true
+      must_explain_clearly: true
+      max_response_time: 12
+
+env_require:
+  - name: OPENAI_API_KEY
+    description: "OpenAI API key for model access"
+    required: true
+  - name: SUPPORT_DB_URL
+    description: "Support database connection string"
+    required: false
+    default: ""
+
+hermes:
+  model: "claude-sonnet-4"
+  temperature: 0.3
+  max_iterations: 25
+  system_prompt: "You are a helpful customer support agent. Be empathetic, clear, and solution-oriented."
+
+test:
+  timeout: 60
+  retry_count: 2
+  continue_on_failure: true
+  parallel: false
+
+evaluation:
+  metrics:
+    - response_time
+    - empathy_score
+    - accuracy
+    - tool_selection
+  pass_threshold: 0.8

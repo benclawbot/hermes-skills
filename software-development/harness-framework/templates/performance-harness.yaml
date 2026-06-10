@@ -1,0 +1,83 @@
+# Performance Harness Example - Response Time Benchmark
+
+name: performance-benchmark
+version: 1.0.0
+description: "Measures agent response times and resource usage"
+harness_type: performance
+hermes_requires: ">=0.13.0"
+author: "Hermes Team"
+license: "MIT"
+
+inputs:
+  - name: benchmark_scenarios
+    description: "Scenarios to benchmark"
+    required: true
+    type: array
+
+outputs:
+  - name: benchmark_results
+    description: "Performance metrics and analysis"
+    required: true
+    type: object
+
+benchmarks:
+  - name: simple_query
+    description: "Basic question answering"
+    prompt: "What is the capital of France?"
+    expected:
+      max_response_time: 3
+      max_tokens: 200
+
+  - name: complex_reasoning
+    description: "Multi-step reasoning task"
+    prompt: "If a train travels 120mph for 2.5 hours, how far does it go?"
+    expected:
+      max_response_time: 10
+      max_tokens: 500
+
+  - name: tool_usage
+    description: "Task requiring tool calls"
+    prompt: "Look up the weather in Tokyo and suggest what to pack"
+    expected:
+      max_response_time: 15
+      max_tokens: 800
+      must_use_tools: true
+
+  - name: long_context
+    description: "Processing long input"
+    prompt: "Analyze this text and summarize: [Long text omitted for brevity]"
+    expected:
+      max_response_time: 20
+      max_tokens: 1000
+      max_input_tokens: 10000
+
+thresholds:
+  max_response_time: 10
+  max_tokens: 1000
+  max_memory_mb: 512
+  max_cost_per_1k_tokens: 0.01
+
+env_require:
+  - name: OPENAI_API_KEY
+    description: "OpenAI API key for model access"
+    required: true
+
+hermes:
+  model: "claude-sonnet-4"
+  temperature: 0.0
+  max_iterations: 30
+
+test:
+  timeout: 60
+  retry_count: 0
+  continue_on_failure: false
+  parallel: true
+  iterations: 10
+
+reporting:
+  formats:
+    - json
+    - markdown
+    - csv
+  include_raw_measurements: true
+  percentiles: [50, 90, 95, 99]

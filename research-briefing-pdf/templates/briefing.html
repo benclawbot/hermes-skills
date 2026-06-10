@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Design template B — soft-modern data journal</title>
+<style>
+  /* =========================================================
+     Design template B — "soft-modern data journal"
+     Vibe: Stripe Press / FT Weekend / Pitchbook tear-sheets
+     Principles: warm off-white, large display numerals, hairline
+     rules, serif body, mono numerics, the data is the design.
+
+     Swap the :root block to re-skin. All design tokens live here.
+     ========================================================= */
+
+  @page {
+    size: A4;
+    margin: 0;
+  }
+
+  :root {
+    --paper:        #f6f1e8;   /* warm cream */
+    --ink:          #1c1a17;   /* near-black, warm */
+    --ink-soft:     #4a4640;
+    --ink-faint:    #8a857c;
+    --rule:         #2a2723;   /* hairline rule colour */
+    --accent:       #b8412a;   /* terracotta — one only, used sparingly */
+    --gold:         #c89b3c;   /* warm gold for chart series */
+    --olive:        #6b7a3a;   /* secondary data colour */
+    --plum:         #6e4663;   /* tertiary data colour */
+    --slate:        #3a5566;   /* quaternary data colour */
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Iowan Old Style", "Source Serif Pro", Georgia, "Times New Roman", serif;
+    font-size: 10.5pt;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    width: 210mm;
+    height: 297mm;
+    box-sizing: border-box;
+    padding: 18mm 18mm 16mm 18mm;
+    page-break-after: always;
+    position: relative;
+    overflow: hidden;
+  }
+  .page:last-child { page-break-after: auto; }
+
+  .folio {
+    position: absolute;
+    bottom: 8mm;
+    right: 18mm;
+    font-family: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 8pt;
+    color: var(--ink-faint);
+    letter-spacing: 0.08em;
+  }
+  .folio .num { color: var(--ink); }
+
+  .eyebrow {
+    font-family: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 7.5pt;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+  h1.display {
+    font-family: "Iowan Old Style", "Source Serif Pro", Georgia, serif;
+    font-weight: 500;
+    font-size: 38pt;
+    line-height: 1.05;
+    letter-spacing: -0.015em;
+    margin: 0 0 6mm 0;
+    color: var(--ink);
+  }
+  h1.display em {
+    font-style: italic;
+    color: var(--accent);
+    font-weight: 400;
+  }
+  h2.section {
+    font-family: "Iowan Old Style", "Source Serif Pro", Georgia, serif;
+    font-weight: 500;
+    font-size: 17pt;
+    line-height: 1.2;
+    margin: 0 0 3mm 0;
+    color: var(--ink);
+  }
+  h3.subhead {
+    font-family: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-size: 8.5pt;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin: 0 0 2mm 0;
+  }
+  p { margin: 0 0 2.5mm 0; }
+  p.lede {
+    font-size: 12.5pt;
+    line-height: 1.45;
+    color: var(--ink);
+    max-width: 145mm;
+    text-align: left;
+  }
+  p.lede::first-letter {
+    font-size: 42pt;
+    line-height: 0.82;
+    float: left;
+    padding: 3mm 2.5mm 0 0;
+    margin-top: 1mm;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .num {
+    font-family: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  hr.hair {
+    border: 0;
+    border-top: 0.5pt solid var(--rule);
+    margin: 4mm 0;
+  }
+  hr.thick {
+    border: 0;
+    border-top: 1.5pt solid var(--rule);
+    margin: 5mm 0 4mm 0;
+  }
+
+  .cover { padding: 0; background: var(--paper); }
+  .cover .top {
+    padding: 18mm 18mm 6mm 18mm;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    border-bottom: 0.5pt solid var(--rule);
+  }
+  .cover .top .brand {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 8pt;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .cover .top .brand .dot { color: var(--accent); }
+  .cover .top .meta {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 8pt;
+    color: var(--ink-soft);
+  }
+  .cover .body { padding: 14mm 18mm 0 18mm; }
+  .cover .title-block { margin-top: 24mm; }
+  .cover .deck { margin-top: 8mm; max-width: 150mm; }
+
+  .cover .hero-figure {
+    margin-top: 14mm;
+    border-top: 0.5pt solid var(--rule);
+    border-bottom: 0.5pt solid var(--rule);
+    padding: 8mm 0 6mm 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8mm;
+  }
+  .hero-figure .kpi .label {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 7.5pt;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 2mm;
+  }
+  .hero-figure .kpi .value {
+    font-family: "Iowan Old Style", "Source Serif Pro", Georgia, serif;
+    font-size: 32pt;
+    line-height: 1;
+    font-weight: 500;
+    color: var(--ink);
+  }
+  .hero-figure .kpi .value .unit {
+    font-size: 14pt;
+    color: var(--ink-soft);
+    font-style: italic;
+    font-weight: 400;
+  }
+  .hero-figure .kpi .note {
+    font-size: 8.5pt;
+    color: var(--ink-soft);
+    margin-top: 2mm;
+    line-height: 1.35;
+  }
+  .cover .credits {
+    margin-top: 8mm;
+    display: flex;
+    justify-content: space-between;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 7.5pt;
+    color: var(--ink-soft);
+    letter-spacing: 0.08em;
+  }
+
+  .section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 5mm;
+  }
+  .section-head .left .eyebrow { display: block; margin-bottom: 1.5mm; }
+  .section-head .right {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 7.5pt;
+    color: var(--ink-faint);
+    text-align: right;
+  }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 10mm; }
+  .cols-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6mm; }
+
+  .card { border-top: 1pt solid var(--rule); padding-top: 3mm; }
+  .card .card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 2mm;
+  }
+  .card .card-head h3 { margin: 0; }
+  .card .src {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 7pt;
+    color: var(--ink-faint);
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: 4mm;
+  }
+  .card .big {
+    font-family: "Iowan Old Style", "Source Serif Pro", Georgia, serif;
+    font-size: 28pt;
+    line-height: 1;
+    font-weight: 500;
+  }
+  .card .big .small { font-size: 14pt; color: var(--ink-soft); font-style: italic; }
+  .card .delta { font-family: "JetBrains Mono", monospace; font-size: 8.5pt; color: var(--accent); }
+  .card .delta.neg { color: var(--ink-soft); }
+
+  /* CSS-only sparkline-style bar chart (no images needed) */
+  .spark {
+    display: flex;
+    align-items: flex-end;
+    height: 22mm;
+    gap: 1.2mm;
+    margin: 3mm 0 2mm 0;
+  }
+  .spark .bar {
+    flex: 1;
+    background: var(--ink);
+    position: relative;
+  }
+  .spark .bar.alt { background: var(--ink-soft); }
+  .spark .bar.faint { background: var(--ink-faint); }
+  .spark .bar.gold { background: var(--gold); }
+  .spark .bar.olive { background: var(--olive); }
+  .spark .bar.plum { background: var(--plum); }
+  .spark .bar.slate { background: var(--slate); }
+  .spark .bar.accent { background: var(--accent); }
+  .spark .bar .lbl {
+    position: absolute;
+    bottom: -4mm;
+    left: 0;
+    right: 0;
+    text-align: center;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 6.5pt;
+    color: var(--ink-faint);
+  }
+
+  table.risks {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+    table-layout: fixed;
+  }
+  table.risks col.idx-col    { width: 9mm; }
+  table.risks col.sev-col    { width: 24mm; }
+  table.risks th, table.risks td {
+    text-align: left;
+    padding: 2mm 2mm 2mm 0;
+    border-bottom: 0.3pt dotted var(--ink-faint);
+    vertical-align: top;
+  }
+  table.risks th {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 7.5pt;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border-bottom: 0.5pt solid var(--rule);
+    padding-bottom: 1.5mm;
+  }
+  table.risks td.idx {
+    font-family: "JetBrains Mono", monospace;
+    color: var(--ink-faint);
+  }
+  table.risks td.title { font-weight: 500; }
+  table.risks td.lvl {
+    font-family: "JetBrains Mono", monospace;
+    text-align: right;
+  }
+  .pill {
+    display: inline-block;
+    padding: 0.5mm 1.5mm;
+    border: 0.5pt solid currentColor;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 7pt;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .pill.high { color: var(--accent); }
+  .pill.med  { color: var(--ink); }
+  .pill.low  { color: var(--ink-faint); }
+
+  .pullquote {
+    border-top: 0.5pt solid var(--rule);
+    border-bottom: 0.5pt solid var(--rule);
+    padding: 5mm 0;
+    margin: 5mm 0;
+  }
+  .pullquote blockquote {
+    margin: 0;
+    font-family: "Iowan Old Style", "Source Serif Pro", Georgia, serif;
+    font-style: italic;
+    font-size: 15pt;
+    line-height: 1.3;
+    color: var(--ink);
+    text-indent: -5mm;
+    padding-left: 5mm;
+  }
+  .pullquote blockquote::before {
+    content: "“";
+    color: var(--accent);
+    font-size: 22pt;
+    line-height: 0;
+    vertical-align: -0.4em;
+    margin-right: 1mm;
+    font-style: normal;
+  }
+  .pullquote .attrib {
+    margin-top: 3mm;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 7.5pt;
+    color: var(--ink-soft);
+    letter-spacing: 0.06em;
+  }
+
+  /* Donut inline — drawn with two stacked conic gradients so the
+     center text is on a clean paper background, not over a wedge.
+     NOTE: keep the radial-gradient hole at >= 36% so any center text
+     stays clear of the colored ring. PITFALL: a second line of
+     subtitle text ("DELAWARE · 2021") often extends past the hole
+     on smaller donuts. Either drop the subtitle or scale up the
+     hole. The cleanest pattern is single-word center ("PBC")
+     with full details in the surrounding legend. */
+  .donut {
+    width: 42mm;
+    height: 42mm;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at center, var(--paper) 0 36%, transparent 36% 100%),
+      conic-gradient(
+        var(--ink)      0 32%,
+        var(--accent)   32% 80%,
+        var(--gold)     80% 92%,
+        var(--olive)    92% 100%
+      );
+    position: relative;
+    flex-shrink: 0;
+  }
+  .donut-center {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    font-family: "Iowan Old Style", serif;
+    z-index: 3;
+    pointer-events: none;
+  }
+  .donut-center .v { font-size: 14pt; line-height: 1; font-weight: 500; color: var(--ink); letter-spacing: 0.02em; }
+  .donut-row { display: flex; align-items: center; gap: 6mm; }
+  .donut-legend { font-size: 8.5pt; flex: 1; min-width: 0; }
+  .donut-legend .row { display: flex; align-items: center; gap: 2mm; margin-bottom: 1.2mm; }
+  .donut-legend .sw { width: 3mm; height: 3mm; flex-shrink: 0; }
+  .donut-legend .row .lbl { flex: 1; min-width: 0; }
+  .donut-legend .row .pct { font-family: "JetBrains Mono", monospace; color: var(--ink-soft); }
+
+  .legend-strip {
+    position: absolute;
+    bottom: 8mm;
+    left: 18mm;
+    right: 36mm;
+    display: flex;
+    gap: 6mm;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 7pt;
+    color: var(--ink-soft);
+    letter-spacing: 0.08em;
+  }
+  .legend-strip .item { display: flex; align-items: center; gap: 1.5mm; }
+  .legend-strip .sw { width: 2.5mm; height: 2.5mm; }
+
+  .mt-2  { margin-top: 2mm; }
+  .mt-4  { margin-top: 4mm; }
+  .mt-6  { margin-top: 6mm; }
+  .mt-8  { margin-top: 8mm; }
+  .muted { color: var(--ink-soft); }
+  .right { text-align: right; }
+  .mono  { font-family: "JetBrains Mono", monospace; }
+</style>
+</head>
+<body>
+
+<!-- PAGE 1 — COVER -->
+<section class="page cover">
+  <div class="top">
+    <div class="brand">equity<span class="dot">·</span>research &nbsp; // &nbsp; vol. iv</div>
+    <div class="meta">ISSUE №07 &nbsp;·&nbsp; 09 JUNE 2026</div>
+  </div>
+
+  <div class="body">
+    <div class="title-block">
+      <div class="eyebrow">Confidential pre-IPO analysis</div>
+      <h1 class="display">Anthropic, PBC<br>— the <em>quietest</em> of the frontier labs.</h1>
+    </div>
+
+    <p class="lede deck">
+      A Delaware public benefit corporation, incorporated in 2021 and
+      now run-rating north of forty-seven billion dollars on an
+      annualised basis. Its S-1 is not yet public; this brief is
+      assembled from press releases, regulatory filings of investors,
+      and the company's own statements through May 2026.
+    </p>
+
+    <div class="hero-figure">
+      <div class="kpi">
+        <div class="label">Run-rate revenue</div>
+        <div class="value">$47<span class="unit">B</span></div>
+        <div class="note">May 2026, ~5× year prior</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Series H post-money</div>
+        <div class="value">$965<span class="unit">B</span></div>
+        <div class="note">$65B raised in May 2026</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Cumulative equity</div>
+        <div class="value">~$120<span class="unit">B</span></div>
+        <div class="note">Since Series A, 2021</div>
+      </div>
+    </div>
+
+    <div class="credits">
+      <div>PREPARED BY &nbsp;·&nbsp; EQUITY RESEARCH DESK</div>
+      <div>FOR INTERNAL DISTRIBUTION</div>
+    </div>
+  </div>
+
+  <div class="folio">— <span class="num">01</span> / 02 —</div>
+</section>
+
+
+<!-- PAGE 2 — TEAR-SHEET (data-dense) -->
+<section class="page">
+
+  <div class="section-head">
+    <div class="left">
+      <div class="eyebrow">§ 01 / pre-IPO snapshot</div>
+      <h2 class="section">A run-rate disproportionate to its disclosed funding.</h2>
+    </div>
+    <div class="right">
+      DATA AS OF 09 JUN 2026<br>
+      <span class="mono">S-1 not yet public</span>
+    </div>
+  </div>
+
+  <hr class="hair">
+
+  <div class="cols">
+
+    <!-- LEFT COLUMN -->
+    <div>
+      <div class="card">
+        <div class="card-head">
+          <h3 class="subhead">Cumulative equity raised</h3>
+          <span class="src">SRC · ANTHROPIC PR</span>
+        </div>
+        <div class="big">$120.5<span class="small">B</span></div>
+        <div class="delta mt-2">▲ + 218% &nbsp;<span class="muted">vs Series A baseline</span></div>
+        <div class="spark">
+          <div class="bar faint"  style="height: 8%"><span class="lbl">A</span></div>
+          <div class="bar faint"  style="height: 12%"><span class="lbl">B</span></div>
+          <div class="bar faint"  style="height: 18%"><span class="lbl">C</span></div>
+          <div class="bar faint"  style="height: 24%"><span class="lbl">D</span></div>
+          <div class="bar"        style="height: 36%"><span class="lbl">E</span></div>
+          <div class="bar"        style="height: 52%"><span class="lbl">F</span></div>
+          <div class="bar accent" style="height: 84%"><span class="lbl">G</span></div>
+          <div class="bar accent" style="height: 100%"><span class="lbl">H</span></div>
+        </div>
+        <p class="muted" style="font-size: 8.5pt; margin-top: 6mm;">
+          From a $124M Series A in 2021 to a $65B Series H in May 2026.
+          The Series H alone accounts for <span class="mono">54%</span> of total
+          capital raised to date. Acceleration is vertical.
+        </p>
+      </div>
+
+      <hr class="hair">
+
+      <div class="card">
+        <div class="card-head">
+          <h3 class="subhead">Pre-IPO equity split <span class="mono muted">— est.</span></h3>
+          <span class="src">SRC · REUTERS, AXIOS</span>
+        </div>
+        <div class="donut-row">
+          <div style="position: relative;">
+            <div class="donut"></div>
+            <div class="donut-center">
+              <div class="v">PBC</div>
+            </div>
+          </div>
+          <div class="donut-legend">
+            <div class="row"><span class="sw" style="background:var(--ink);"></span><span class="lbl">Founders &amp; Class F</span><span class="pct">32%</span></div>
+            <div class="row"><span class="sw" style="background:var(--accent);"></span><span class="lbl">Strategic &amp; VC (Class A)</span><span class="pct">48%</span></div>
+            <div class="row"><span class="sw" style="background:var(--gold);"></span><span class="lbl">Compute partners</span><span class="pct">12%</span></div>
+            <div class="row"><span class="sw" style="background:var(--olive);"></span><span class="lbl">Employees &amp; advisors</span><span class="pct">8%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN -->
+    <div>
+      <div class="card">
+        <div class="card-head">
+          <h3 class="subhead">Top risks, ranked</h3>
+          <span class="src">SRC · PR / 8-K</span>
+        </div>
+        <table class="risks">
+          <colgroup>
+            <col class="idx-col">
+            <col>
+            <col class="sev-col">
+          </colgroup>
+          <thead>
+            <tr><th>#</th><th>Risk</th><th class="right">Severity</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="idx">01</td>
+              <td class="title">Hyperscaler circular dependency</td>
+              <td class="lvl"><span class="pill high">High</span></td>
+            </tr>
+            <tr>
+              <td class="idx">02</td>
+              <td class="title">Project Panama copyright suit</td>
+              <td class="lvl"><span class="pill high">High</span></td>
+            </tr>
+            <tr>
+              <td class="idx">03</td>
+              <td class="title">Pentagon supply-chain dispute</td>
+              <td class="lvl"><span class="pill high">High</span></td>
+            </tr>
+            <tr>
+              <td class="idx">04</td>
+              <td class="title">Compute capex burn</td>
+              <td class="lvl"><span class="pill med">Med</span></td>
+            </tr>
+            <tr>
+              <td class="idx">05</td>
+              <td class="title">Dual-class governance optics</td>
+              <td class="lvl"><span class="pill med">Med</span></td>
+            </tr>
+            <tr>
+              <td class="idx">06</td>
+              <td class="title">Talent retention post-IPO</td>
+              <td class="lvl"><span class="pill low">Low</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <hr class="hair">
+
+      <div class="pullquote">
+        <blockquote>
+          Anthropic is selling, not buying, the AI cycle. The risk is
+          that its partners decide to vertically integrate.
+        </blockquote>
+        <div class="attrib">— EQUITY RESEARCH DESK · 09 JUN 2026</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="legend-strip">
+    <div class="item"><span class="sw" style="background:var(--ink-faint);"></span>SERIES A–D</div>
+    <div class="item"><span class="sw" style="background:var(--ink);"></span>SERIES E–F</div>
+    <div class="item"><span class="sw" style="background:var(--accent);"></span>SERIES G–H</div>
+    <div class="item" style="margin-left:auto;">CONFIDENTIAL · TEAR SHEET</div>
+  </div>
+
+  <div class="folio">— <span class="num">02</span> / 02 —</div>
+</section>
+
+</body>
+</html>

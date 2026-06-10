@@ -1,0 +1,25 @@
+// safety.csl -- Build artifact block + pre-push staging check
+CONFIG {
+  ENFORCEMENT_MODE: BLOCK
+  CHECK_LOGICAL_CONSISTENCY: TRUE
+}
+
+DOMAIN GitSafety {
+  VARIABLES {
+    action: {"git_add", "git_commit", "git_push", "terminal"}
+    staging_state: {"CLEAN", "DIRTY", "UNKNOWN"}
+    staging_checked: {"TRUE", "FALSE", "UNKNOWN"}
+  }
+
+  // Rule 1: Build artifacts never enter git (state must be CLEAN)
+  STATE_CONSTRAINT no_build_artifacts_in_git {
+    WHEN action == "git_add" OR action == "git_commit"
+    THEN staging_state == "CLEAN"
+  }
+
+  // Rule 2: Pre-push staging check required
+  STATE_CONSTRAINT pre_push_staging_check {
+    WHEN action == "git_push"
+    THEN staging_checked == "TRUE"
+  }
+}

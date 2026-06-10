@@ -1,0 +1,9 @@
+{
+  "last_report_path": "/home/thomas/.hermes/logs/curator/20260609-203824",
+  "last_run_at": "2026-06-09T20:38:24.350746+00:00",
+  "last_run_duration_seconds": 606.814684,
+  "last_run_summary": "auto: no changes; llm: ## Human Summary\n\nI surveyed the 21 agent-created skills for prefix clusters and umbrella opportunities. Two clean clusters emerged — everything else in the candidate list is a class-level umbrella or a narrow-but-genuinely-distinct skill t…\narchived 2 skill(s):\n  • github-auth → github-pr-workflow\n  • x-read-longform → xurl\nfull report: hermes curator status\nkeep an umbrella stable: hermes curator pin github-pr-workflow",
+  "last_run_summary_shown_at": "2026-06-02T20:00:41.087084+00:00",
+  "paused": false,
+  "run_count": 5
+}
