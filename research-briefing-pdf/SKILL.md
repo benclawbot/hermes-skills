@@ -1,7 +1,7 @@
 ---
 name: research-briefing-pdf
-description: "Produce a polished, multi-page PDF research briefing from public sources (SEC filings, press releases, public web pages) — with charts, tables, risk heatmaps, and a clear call. Loads when Thomas says 'make me a full briefing', 'give me a PDF report on X', 'research Y and produce a document', or hands over a URL/PDF and asks for written analysis. The default design is the 'soft-modern data journal' aesthetic (cream paper, terracotta accent, serif display, mono numerics) — re-skinnable by swapping the :root CSS tokens. Includes layout-density pitfalls, the snap-Chromium-writes lie, the file://+spaces pitfall, the relative-img-src pitfall, the pdftotext/pdfinfo/pdftoppm verification trio, and the pixel-based layout audit (vision hallucinates layout percentages — measure, don't guess)."
-version: 2.0.0
+description: "Produce a polished PDF research briefing from public sources (SEC filings, press releases, public web pages) — with charts, tables, risk heatmaps, and a clear call. Loads when Thomas says 'make me a full briefing', 'give me a PDF report on X', 'research Y and produce a document', or hands over a URL/PDF and asks for written analysis. The default design is the 'soft-modern data journal' aesthetic (cream paper, terracotta accent, serif display, mono numerics) — re-skinnable by swapping the :root CSS tokens. Uses single-flow pagination (one continuous HTML document, browser paginates, no audit layer required). Includes layout-density pitfalls, the snap-Chromium-writes lie, the file://+spaces pitfall, the relative-img-src pitfall, the pdftotext/pdfinfo/pdftoppm verification trio, the chromium grid-1fr collapse fix (use flexbox), and the vision-analyze layout-hallucination reality check."
+version: 2.1.0
 author: Hermes Agent (Thomas)
 license: MIT
 metadata:
@@ -38,6 +38,35 @@ Do NOT use this skill for:
 - Obsidian vault generation (use `deep-research-obsidian`)
 - Single-page summary (just write it in chat)
 - Real-time market commentary (use `fast-research-digest`)
+
+## The single most important rule (2026-06-27)
+
+**Don't build N page boxes. Build one continuous document and
+let the browser paginate.** This is the lesson from the session
+that produced `last30days-world-briefing-2026-06-27.pdf`: the
+original 4-page design used `<section class="page">` with
+`width:210mm; height:297mm; page-break-after:always` for each
+section. Bottom-blank % on page 3 was flagged repeatedly by
+verification scripts that had to be tuned because the test
+itself was wrong. Thomas's response:
+
+> "instead of trading the bottom of the page isn't empty, isn't
+> it easier that the text is continuous with no page break
+> from one section to the next? That's a lot of testing done
+> just to produce a simple PDF"
+
+The fix was structural: remove the `.page` height/page-break
+boxes; add `page-break-inside: avoid` to charts and
+`page-break-inside: avoid` to list items. The browser now
+paginates correctly on the first pass and no audit is needed.
+The `scripts/audit_layout.py` was retired because the bug
+class it caught no longer exists.
+
+If you find yourself reaching for an audit layer, a pixel
+density checker, or a "verify every page" loop: stop. The
+problem is probably in the HTML structure, not in the lack
+of verification. See `references/single-flow-pagination.md`
+for the working template and the chromium flags required.
 
 ## Design system (the soft-modern data journal)
 
@@ -120,7 +149,7 @@ pdfinfo output.pdf | grep -E "Pages|File size|Title"
 
 # 2. All chart images actually embedded (not just referenced)
 pdfimages -list output.pdf | head
-# Expect: N large image entries (1284-1578px wide, ~50-100KB each)
+# Expect: N large image entries (700-870px wide, ~15-50KB each)
 
 # 3. Key facts present in the extracted text
 pdftotext output.pdf - | grep -E "<key fact 1>|<key fact 2>|..."
@@ -130,8 +159,12 @@ Also render 2-3 preview pages with `pdftoppm -png -r 80 -f N -l N
 output.pdf /tmp/preview` and use `vision_analyze` to check
 readability. **Vision is reliable for relative comparisons but
 UNRELIABLE for absolute blank-space percentages and for asserting
-specific element overlaps** — for those, use the pixel audit at
-`scripts/audit_layout.py`.
+specific element overlaps** — for those, use `pdfimages -list`
+to confirm chart embeds and `pdftotext -layout` to verify text
+flow. The legacy `scripts/audit_layout.py` was removed
+2026-06-27 because the bug class it caught no longer exists
+with single-flow pagination (see "The single most important
+rule" at the top of this file).
 
 ## Pitfalls (learned the hard way)
 
@@ -164,6 +197,22 @@ briefings.
   Rectangles. The asymmetry bites on ownership / cap-stack
   charts.
 
+- **(2026-06-27) Chromium `--print-to-pdf` silently breaks
+  `display: grid` with `1fr` track in multi-page layouts.**
+  Standalone HTML tests show grid `12mm 1fr` rendering full-width
+  correctly. Same CSS nested inside `<section class="page">` with
+  `@page { margin: 0 }` and `box-sizing: border-box` collapses the
+  `1fr` body column to ~50px wide (text wraps word-by-word in a
+  narrow left strip). Pixel-audit catches it — pdftotext does NOT,
+  because it flattens narrow-column wrapped text into the same
+  shape as wide text and reports full-width paragraphs. **Fix:**
+  use `display: flex; flex: 0 0 <counter-width>; gap; .body { flex:
+  1 1 0; min-width: 0 }` instead. Flexbox works correctly inside
+  the `.page` context; grid does not. Verified 2026-06-27 on the
+  30-day world briefing: vision reported "narrow column" on the
+  grid version, pixel audit confirmed it (78–136px ink width),
+  flexbox fix restored 78–831px (full body width).
+
 - **(2026-06-08) Headless Chrome doesn't render
   `--no-pdf-header-footer` AND page-headers consistently.** The
   template uses neither; pages are styled entirely with
@@ -183,8 +232,10 @@ The first briefings shipped with these. They are now the
 highest-priority class of bugs. After producing two briefings
 in a row with the same defect, the most common shipping-quality
 issues are *not* chart-data errors — they are layout density.
-Every briefing should pass `scripts/audit_layout.py` before
-delivery.
+The previous `scripts/audit_layout.py` post-render check has
+been retired; the fix is to use **single-flow pagination**
+(no per-section `height: 297mm; overflow: hidden; page-break-after:always`
+boxes) so the browser paginates correctly on the first pass.
 
 - **`page-break-before: always` on every h2 forces orphan
   pages.** A 2-line section after a 1-line section gets its own
@@ -212,6 +263,26 @@ delivery.
   pushes the disclaimer off the cover onto page 2 (often
   half-empty). **Fix:** tighten cover content; let the
   disclaimer sit at the natural bottom.
+
+- **(2026-06-27) CSS `display: grid` with `::before { content: counter(...) }`
+  on `<li>` causes per-word vertical wrap in chromium
+  `--print-to-pdf`.** A list like
+  `<li>` + empty leading `<div>` + body `<div>` with
+  `grid-template-columns: 9mm 1fr` plus `counter-increment: c`
+  on `<li>` and `::before { content: counter(c) }` rendered
+  every word of every item on its own line — the body column
+  collapsed to ~10mm wide. Cause: chromium's PDF print path
+  computes grid track sizes before resolving pseudo-elements
+  attached to the grid item, leaving the `1fr` track unconstrained
+  and the leading empty cell (holding the counter pseudo-element)
+  consuming the row's natural width. **Fix:** don't use
+  `::before` for list counters in PDF-targeted HTML. Use explicit
+  numbered markers — `<li><span class="n">01</span><div class="body">…`
+  with `grid-template-columns: 12mm 1fr` and hard-coded numbers.
+  Pixel-audit + pdftotext will both confirm the fix; vision will
+  sometimes still hallucinate "narrow column" (see Vision-model
+  unreliability section). Verified 2026-06-27 on the 30-day world
+  briefing.
 
 ### Layout-density pitfalls (matplotlib charts — verified 2026-06-09)
 
@@ -261,6 +332,10 @@ delivery.
   (~6.5" for A4 with 18mm margins = 909px at 110dpi). Verify
   with `PIL.Image.open().size[0] < page_width_px` before rendering.
   (Verified 2026-06-10 with funding timeline chart overflowing.)
+  **Hard rule for every chart PNG before PDF render:** width MUST
+  be ≤ 870px (allowing 39px slack for `bbox_inches='tight'` crop).
+  Add this assertion to `make_charts.py` as the final pre-step —
+  fail loud, don't ship overflow.
 
 - **Source line collides with x-axis tick labels.**
   `fig.text(0.01, 0.005, ...)` with default `bbox_inches='tight'`
@@ -313,18 +388,51 @@ delivery.
   `fig.patch.set_facecolor('#f6f1e8')` and
   `ax.set_facecolor('#f6f1e8')` — don't remove these.
 
-### Vision-model unreliability (verified 2026-06-09)
+### Vision-model unreliability (verified 2026-06-09, confirmed live 2026-06-27)
 
 - **Vision-analyze hallucinates layout percentages.** Vision
-  consistently reports "30–65% blank at bottom" on pages that
-  are fine (the 16mm page margin is ~8% blank; vision inflates
-  it 4-8×), and reports "labels overlapping" on charts that are
-  geometrically clean. **Fix:** vision is reliable for
-  *relative* layout problems (is chart X more crowded than
-  chart Y?) but unreliable for *absolute* percentages and for
-  asserting "these specific N labels overlap". Pair vision with
-  the pixel-audit script at `scripts/audit_layout.py`, which
-  computes actual bottom-blank % and detects overlapping
+  consistently reports "30–65% blank at bottom" on pages that are
+  fine (the 16mm page margin is ~8% blank; vision inflates it 4-8×),
+  and reports "labels overlapping" on charts that are geometrically
+  clean. **Fix:** vision is reliable for *relative* layout problems
+  (is chart X more crowded than chart Y?) but unreliable for
+  *absolute* percentages and for asserting "these specific N labels
+  overlap". Trust `pdfimages -list` (real chart embeds) and
+  `pdftotext -layout` (real text flow) instead of vision for layout
+  truth. (Pixel-audit script retired 2026-06-27 — single-flow
+  pagination made it unnecessary.)
+
+- **(2026-06-27, 30-day world briefing) Vision will confidently
+  describe a full-width text layout as "narrow vertical column on
+  the left" when the grid layout is visually dense.** The page had
+  10 numbered items spanning the full 174mm content width; vision
+  returned "narrow column on the left side... the rest of the page
+  is wide/empty space." pdftotext + pixel-audit both confirmed
+  full-width horizontal paragraphs. **Fix:** when vision reports a
+  layout problem, always cross-check with `pdftotext -layout` and a
+  PIL pixel-density scan *before* believing it. The decision rule:
+
+  ```bash
+  # 1. Extract text with positioning
+  pdftotext -layout briefing.pdf -
+
+  # 2. Pixel density per row
+  python3 -c "
+  from PIL import Image; import numpy as np
+  img = np.array(Image.open('preview-N.png').convert('L'))
+  # column of ink-density per column, to detect narrow-column layouts
+  ink = (img < 200).any(axis=0)
+  ink_left = ink[:ink.size//2].sum()
+  ink_right = ink[ink.size//2:].sum()
+  print(f'left-half ink columns: {ink_left}/{ink.size//2}')
+  print(f'right-half ink columns: {ink_right}/{ink.size//2}')
+  print(f'ratio: {ink_left/ink_right:.2f} (1.0 = balanced)')
+  "
+  ```
+
+  A ratio near 1.0 = full-width text; a ratio >>1 = genuine narrow
+  column. Don't trust vision's "narrow column" claim without this
+  check.
   colored markers via flood-fill.
 
 ## When the user reports a layout bug (post-delivery feedback loop)
@@ -415,36 +523,59 @@ relevant worked example) with the symptom → diagnosis → fix
 trilogy. The pitfalls list is the agent's institutional
 memory; the worked-example file is the session's audit log.
 
-## Pre-delivery audit (run this every time)
+## What you do NOT need anymore (2026-06-27)
 
-```bash
-python ~/.hermes/skills/research-briefing-pdf/scripts/audit_layout.py \
-    /path/to/briefing.pdf /path/to/charts/
+The old pre-delivery audit script (`scripts/audit_layout.py`)
+and the per-chart width checker (`scripts/chart_width_check.py`)
+were removed. They existed to catch bug classes that came from
+forced page boxes:
+
+1. **Bottom-blank % per page** — gone because no fixed-height
+   page boxes means no orphan halves or 90%-blank pages.
+2. **Chart marker overlap** — still possible at the chart
+   level; catch it with `pdftoppm` + `vision_analyze` on a
+   single chart PNG before embedding.
+3. **Image embed count** — `pdfimages -list` is the check
+   (covered in verification trio above).
+4. **Body column width** — gone because no grid-`1fr` collapse
+   inside `@page { margin: 0 }` containers (we don't use those
+   containers anymore).
+
+If you find yourself writing a pixel-density script or a
+bottom-blank detector for a briefing: stop and re-read
+"The single most important rule" at the top of this file.
+
+## Chart-width hard rule (still in force)
+
+Chromium `--print-to-pdf` does NOT respect CSS `max-width: 100%`
+on images for PDF output. Charts wider than the page content
+width will overflow the right edge of the PDF regardless of
+the CSS. **Hard rule for every chart PNG before PDF render:**
+width MUST be ≤ 870px (allowing ~39px slack for
+`bbox_inches='tight'` crop on A4 with 18mm margins). Add this
+assertion at the end of `make_charts.py`:
+
+```python
+from PIL import Image
+for p in chart_paths.values():
+    w, h = Image.open(p).size
+    assert w <= 870, f"{p} is {w}px wide (max 870px)"
 ```
 
-The script checks three things vision alone gets wrong:
+### Vision-hallucination reality check (2026-06-27)
 
-1. **Bottom-blank % per page** (real pixel ratio, not vision's
-   guess). Pages >50% blank in the bottom 30% are real problems;
-   pages with 100% blank in the bottom 15% are normal page
-   margins.
-2. **Chart marker overlap** (flood-fill on red/gold/grey
-   pixels, pairwise distance check).
-3. **Image embed count** (chromium has been known to render PDF
-   without chart PNGs).
-
-A one-liner version of the same check (run on a single chart):
-
-```bash
-python3 -c "
-from PIL import Image; import numpy as np
-img = np.array(Image.open('chart.png').convert('L'))
-bot = img[int(img.shape[0]*0.6):, :]
-text_rows = (bot < 200).any(axis=1)
-gaps = np.diff(np.where(text_rows)[0])
-print(f'bottom-band gap: {gaps.max() if len(gaps) else 0} px (target > 30)')
-"
-```
+Vision said the page-2 list of the 30-day briefing was "in a
+narrow left column" — turned out vision was **right that
+time** (the `display: grid; grid-template-columns: 12mm 1fr`
+inside `@page { margin: 0 }` collapses to ~50px in chromium
+`--print-to-pdf`; pixel audit confirmed 78–136px ink width).
+Vision was wrong earlier in the same session when it said
+"labels overlap" on a clean chart (chart 04) — flood-fill
+proved no overlap. **Rule:** treat vision as a hypothesis
+generator, never as ground truth. Always run the pixel audit
+before delivery, and when vision contradicts the audit,
+*re-run the audit* before trusting vision. The audit is the
+ground truth; vision gets to vote, not decide.
 
 ## What a good briefing looks like (structural template)
 
@@ -590,13 +721,40 @@ Thomas can re-style if he wants.
   recurring chart-geometry defects: mixed-size stacked bar
   labels (side-callout table pattern) and chart-width
   overflow (chromium ignores `max-width` on images).
+  **Note:** the worked example still references
+  `scripts/audit_layout.py` in its pre-delivery verification
+  block. That file is no longer shipped with this skill
+  (removed 2026-06-27 with the single-flow pagination
+  migration). Use the `pdfinfo` + `pdfimages -list` +
+  `pdftotext` trio in the "Verification trio" section above
+  instead.
 - `references/spacex-ipo-briefing-2026-06-08.md` — worked
   example from the first briefing (S-1/A extraction, EU
   prospectus, 17-page output, navy+gold design — predecessor
   to the current default).
-- `scripts/audit_layout.py` — post-render layout audit.
-  Detects real (non-hallucinated) bottom-blank %, **chart
-  width overflow** (chromium ignores `max-width` on images
-  in `--print-to-pdf` output), chart marker overlap via
-  flood-fill, and missing image embeds. Run before every
-  delivery.
+- `references/matplotlib-label-collision.md` — the
+  side-callout table pattern for stacked bars with
+  mixed-size segments, plus the chart-width overflow diagnosis
+  flow.
+- `references/design-system.md` — full token list, type
+  pairing rationale, visual grammar.
+- `references/single-flow-pagination.md` — the working
+  template and chromium flags for the new pattern. Read this
+  before rendering any briefing PDF.
+- `references/break-avoid-patterns.md` — when and how to
+  apply `break-after: avoid`, `break-before: avoid`, and
+  `page-break-inside: avoid` for section headers, end-strips,
+  and other "glue" elements. **Companion to bug #8 and bug
+  #9 in `devops/chromium-pdf-layout-pitfalls`.**
+- `scripts/audit_layout.py` — RETIRED 2026-06-27. The audit
+  layer was a band-aid for fixed-height page boxes that left
+  orphan halves and bottom-blank sections. With the
+  single-flow pagination pattern (`page-break-inside: avoid`
+  on charts, no per-section `height: 297mm; overflow: hidden`
+  boxes, plus `break-after: avoid` on `.section-head` and
+  `break-before: avoid` on `.end-strip`), the browser
+  paginates correctly and the audit's job is done by the
+  browser. The file may still be on disk as a fossil; if you
+  see other skills calling it, replace those calls with
+  the `pdfinfo` + `pdfimages -list` + `pdftotext` trio.
+  Don't reintroduce the script.

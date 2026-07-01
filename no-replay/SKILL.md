@@ -163,7 +163,33 @@ Good:
 
 The user knows what they asked for. The structure of the reply is the proof you heard them.
 
+**Subcase: fabricated user replies in option lists.** The worst form of replay — inventing the user's prior messages. Observed 2026-06-26: the agent wrote a list of "what the user might say next" formatted as if they were prior user messages, e.g.:
+
+> User: "Approved, defaults are fine"
+> User: "Answer the 5 questions first"
+
+Those weren't user messages. They were options the agent was offering. The next user message was literally "What?" — because the previous reply looked like a transcript the user hadn't written, not a question they could answer.
+
+**The rule:** when listing options for the user, never format them as quoted user messages. They are options, not statements of intent. Format as:
+- a numbered list: "1. Approved, defaults are fine. 2. Answer the 5 questions first. 3. Hold off on this entirely."
+- bullet points with explicit framing: "You can: A) approve, B) override Q3, C) defer."
+- a single question: "Approve with defaults, or want to override any of the 5 questions first?"
+
+**The test:** strip the surrounding quotes and ask: "Is this something the user could realistically have said?" If the answer requires you to fill in their motivation, agreement, or next action — it's an option, not a replay, and must not be formatted as one. If you can't tell whether something is a replay or an option without knowing the user's mind, format it as an option.
+
+**Why this is the worst form:** a fabricated user message is not just filler — it changes the apparent conversation state. The user now has to figure out which of the invented lines they actually said (none), correct the false record, and figure out the real question underneath. That's three replies to recover what should have been one clear question.
+
 **Subcase: "did you do X?" when you have no record of X.** Thomas catches false claims fast. When asked to confirm a request you have no trace of — search all four sources (memory, user profile, installed skills, past sessions) before responding. If all four return zero hits, the move is short: "searched [the four], zero hits, please restate." Never reach for plausible explanations, partial matches, or "I think we discussed it." If a user thinks they gave you an instruction, the failure is on your end (compaction drop, gateway eat, missed context) — the right response surfaces that gap and asks for restatement, not a confident claim.
+
+**Subcase: "Stop" / "I told you 10 times" is the strongest no-replay signal in the protocol.** When a user breaks the conversation to explicitly halt a path with "Stop" / "I already said X" / "I told you N times" / "Why are you doing Y again" / "Didn't I ask for Z" — they are not asking you to retry or to summarize what you tried. They are telling you the prior instruction is **load-bearing** and that you have demonstrably failed to act on it. The right move:
+
+1. **Do not re-attempt the failed path** with a longer explanation of why it was correct. That is the literal thing they said no to.
+2. **Do not apologize twice** ("You're right, sorry, let me try again"). One acknowledgment is enough. Repeating the apology is replay of the apology.
+3. **Surface the gap in one line**: "I had it as a soft default, should have been a hard rule. Moving it now." Or: "Saw 'generalize this' but treated it as a casual aside. Wrong read." The one-line diagnosis shows you understood the failure mode, not just the symptom.
+4. **Then act** — not re-ask. The user already gave the instruction. Re-asking is the no-replay violation.
+5. **Patch the upstream cause** if a memory entry or skill is missing the rule. The pattern "user repeated N times → assistant finally did it" means the policy isn't durable yet. Make it durable: add the rule to the relevant skill or memory entry so the next session starts already knowing.
+
+**Why this matters more than the typical no-replay case:** the user has explicitly named the rule. They've done your work for you by stating the principle out loud. The only remaining job is to write it down somewhere persistent and stop. Anything else — re-asking, re-explaining, re-attempting — is exactly the failure mode they flagged.
 
 Bad:
 > Audit produced 5 findings. "Want me to do A + C right now? And tell me on B — which tools do you actually use, so I can either get you keys or drop the noise?"

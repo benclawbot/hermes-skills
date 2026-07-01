@@ -95,6 +95,74 @@ If you catch yourself about to write a `##` section header in a GENERAL-query bo
 
 ---
 
+# STEP 0.1: ZERO-CONFIG FALLBACK (READ BEFORE RUNNING THE ENGINE)
+
+If the engine logs `Reddit: 0 threads, YouTube: 0 videos, HN: 0 stories...` and an empty `Ranked Evidence Clusters` on a topic the user clearly cares about (e.g. "what happened in the world in the last 30 days", "breaking news today"), do NOT conclude the topic has no evidence. Two stacked failure modes hit a default install behind NAT or a cloud VM:
+
+1. `RedditPublic 403 forbidden` on `reddit.com/search.json` (rate-limits headless callers).
+2. Engine's internal planner LLM call returns `HTTPError: HTTP 400: Bad Request` when the only LLM key is `OPENROUTER_API_KEY` and the default model doesn't match — silently falls back to a one-word deterministic query, which also 403s.
+
+If `SCRAPECREATORS_API_KEY` (X/TikTok/IG) and any of `BRAVE_API_KEY` / `EXA_API_KEY` / `SERPER_API_KEY` / `PARALLEL_API_KEY` (web search) are unset, **every named source has been throttled to nothing**. The output looks like a planner failure; it is a source-availability failure.
+
+**Fallback:** Hacker News's public Firebase API is keyless, unauthenticated, and tolerant. The engine's HN adapter hits the Algolia search endpoint, which returns empty for vague breaking-news phrases. Pull `topstories.json` directly and filter `time >= now - 30d` client-side:
+
+```bash
+# Linux: /usr/bin/python3.14 (this skill requires Python 3.12+; system python3.11 is too old)
+python3.14 ~/.hermes/skills/research/last30days/scripts/hn_fallback.py              # last 30d, top 50 by score
+python3.14 ~/.hermes/skills/research/last30days/scripts/hn_fallback.py "ai OR gpt" --limit 20
+python3.14 ~/.hermes/skills/research/last30days/scripts/hn_fallback.py --json --limit 100
+```
+
+Treat the output as raw evidence (same EVIDENCE-FOR-SYNTHESIS contract as engine output) and run the standard `What I learned:` / KEY PATTERNS / CITATIONS synthesis on it. Skip this fallback when a web backend is configured — the engine's auto-resolve path will pull real-time web evidence on its own. Full rationale: `references/zero-config-fallback.md`.
+
+**Python interpreter note:** `last30days.py` requires Python 3.12+. On Linux, the system `python3` is often 3.10/3.11. Use `/usr/bin/python3.14` (or `python3.12`/`python3.13` if installed) — NOT `python3`. Running with the system interpreter produces `last30days v3 requires Python 3.12+` and exits.
+
+---
+
+# STEP 0.2: PDF DELIVERY (RUN AFTER SYNTHESIS)
+
+After the engine returns its evidence clusters and you've written the synthesis, **always offer (or auto-generate) a 3-page PDF briefing** — chat threads are easy to skim past, PDFs are read end-to-end. The `briefing.py` script in this skill wraps the engine's evidence into a structured briefing with 4 matplotlib charts and an Anthropic-skinned template.
+
+**Two invocation modes:**
+
+```bash
+# (A) Standalone HN-only briefing — no engine run needed
+python3.14 ~/.hermes/skills/research/last30days/scripts/briefing.py \
+    --output ~/Desktop/last30days-briefing-$(date +%Y-%m-%d).pdf
+
+# (B) Multi-source briefing from a previous engine run — preferred when keys are set
+python3.14 ~/.hermes/skills/research/last30days/scripts/last30days.py \
+    "what happened in the world in the last 30 days" \
+    --plan /path/to/plan.json --emit=json --days 30 \
+    > /tmp/last30days.json 2>/dev/null
+python3.14 ~/.hermes/skills/research/last30days/scripts/briefing.py \
+    --engine-out /tmp/last30days.json \
+    --output ~/Desktop/last30days-world-briefing-$(date +%Y-%m-%d).pdf
+```
+
+**What the script does:**
+1. Loads items from `--engine-out` JSON (mode B) or pulls HN `topstories.json` directly (mode A).
+2. Normalizes engine's per-source item shape (`{title, snippet, url, engagement:{score,num_comments}, published_at}`) into a unified `{title, score, time, comments, url, source}` list.
+3. Renders 4 charts (top-10, score-vs-comments scatter, themes, timeline).
+4. Builds ONE continuous HTML document (cover + headlines + themes/timeline + pullquote + takeaways).
+5. Renders to PDF via Playwright headless Chrome with `--allow-file-access-from-files` so the chart PNGs embed.
+
+**Why one continuous document instead of N page boxes:** A 4-page briefing forced into N `width:210mm; height:297mm; page-break-after:always` boxes is fragile: chromium truncates the bottom of every section that overflows by even a few pixels, leaves orphan-half pages, and requires a layout-audit layer to catch. One continuous body lets the browser paginate; `page-break-inside: avoid` on charts keeps them intact. Cover hero, headlines list, themes/timeline cols, pullquote, and takeaways each take exactly as much vertical space as they need.
+
+**Pitfalls baked into the script (don't re-discover these):**
+- **Flexbox not CSS grid** for the headlines list (`<ol class="lede-list"><li>`). Chromium `--print-to-pdf` silently collapses `grid-template-columns: 12mm 1fr` inside `@page { margin: 0 }` containers. Use `display: flex; align-items: flex-start; gap: 4mm;` with `.body { flex: 1 1 0; min-width: 0; }`.
+- **Chromium `--allow-file-access-from-files` flag is required** so `<img src="file:///tmp/charts/...">` embeds. Without it, the PDF prints the chart titles in text but the chart images are blank rectangles.
+- **Use `~/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome`, NOT `/snap/bin/chromium`.** Snap chromium lies about file writes — it claims success but the PDF is empty or stale.
+- **Invoke with `python3.14`**, not `python3`. The system `python3` is 3.11 and the skill needs 3.12+ (tomllib import). `briefing.py` has a `_bootstrap_interpreter()` that re-execs under `~/.hermes/venvs/pdf/bin/python3.14` if matplotlib is missing — but direct `python3.14` invocation is the right call.
+
+**Source mix:** Cover, KPIs, and headlines reflect whatever the engine returned. With `--engine-out`, the cover labels show actual sources (e.g., "Across 77 high-engagement posts from 6 social sources (github, instagram, polymarket, reddit, tiktok, youtube)"). Without `--engine-out`, the cover says "HN top-stories feed".
+
+**To re-skin:** swap the `:root` CSS tokens inside `build_html()`. The chart palette (`PAPER`/`INK`/`ACCENT` constants at the top) follows the same token set.
+
+**Output location default:** `~/Desktop/last30days-briefing-<YYYY-MM-DD>.pdf` (mode A) or `~/Desktop/last30days-world-briefing-<YYYY-MM-DD>.pdf` (mode B example). Override with `--output`.
+
+---
+
 # OUTPUT CONTRACT (BADGE + LAWS — READ BEFORE EMITTING YOUR RESPONSE)
 
 These anchors used to live at line 1094 of this file. Three independent Opus 4.7 self-debugs on 2026-04-18 confirmed the file was too long to reach them before synthesis. Moved here in v3.0.8. Do not synthesize without reading this section.

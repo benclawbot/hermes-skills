@@ -2,14 +2,17 @@
 name: codebase-porting
 description: >
   Implement external specifications (build-ready specs, porting plans, or
-  integration plans) into an existing real codebase, or port a codebase from
-  one platform/framework to another. Covers: reading source code deeply
-  before writing code, mapping platform APIs to their equivalents, avoiding
-  premature architectural decisions, direct file patching over delegation
-  for complex multi-file changes, and the path-collision pre-check that
-  prevents silently destroying tracked files when a spec specifies literal
-  package paths. Loaded when user says "implement that", "build this spec",
-  "port X to Y", or "rewrite X for Windows".
+  integration plans) into an existing real codebase, or port a codebase
+  from one platform/framework to another. Covers: reading source code
+  deeply before writing code, mapping platform APIs to their equivalents,
+  avoiding premature architectural decisions, direct file patching over
+  delegation for complex multi-file changes, the path-collision
+  pre-check that prevents silently destroying tracked files when a spec
+  specifies literal package paths, and the **location-confirmation
+  checkpoint** for "implement this as a separate / generalized / own-folder"
+  requests. Loaded when user says "implement that", "build this spec",
+  "port X to Y", "rewrite X for Windows", "generalize this to any new
+  build", "put it in its own folder", or "this is a separate requirement".
 
 triggers:
   - port macos app to windows
@@ -35,9 +38,125 @@ triggers:
   - rename the directory
   - move repo to new name
   - rename the package
+  - generalize this to any new build
+  - put it in its own folder
+  - this is a separate requirement
+  - own repo on github
+  - go to the <name> repo
+  - mind drop
+  - repo at <path>
+  - implement against <repo-name>
+  - switch from <vendor> to <vendor>
+  - swap to <vendor>
+  - use <vendor> instead
+  - replace <vendor> with <vendor>
+  - move from <vendor> to <vendor>
+  - use <api> oauth for <vendor>
+  - use my <vendor> key
+  - use this design
+  - use this exact design
+  - match this style
+  - apply this look
+  - make it look like this
+  - rebuild the front end
+  - design only no logic
+  - only change the design
+  - restyle this app
 ---
 
 # Codebase Porting & Spec Implementation
+
+## Location-Confirmation Checkpoint (FIRST thing, before reading code)
+
+**When the user asks you to build / port / generalize something, the first
+question is not "what does the source look like."** It's "where does this
+live?" The user has corrected this in anger at least once:
+
+> *"Stop. You're building it inside Omni Memory where I explicitly mentioned
+> it was a separate requirement I wanted to generalize to any new build.
+> It should be in its own folder."*
+
+**HIGH-INTENT phrases that mandate a confirmation question before writing
+any file:**
+
+| Phrase | What it means | Where it should NOT go |
+|---|---|---|
+| "I want this generalized" | Workflow is meant to be reusable across many builds | Inside any single project repo |
+| "It should be in its own folder" | A sibling location, not inside the existing one | Inside the existing repo the user is currently discussing |
+| "This is a separate requirement" | Distinct from whatever project is being discussed | Piggybacked on the current project |
+| "Make it a public repo on [account]" | The user wants to share this as a public artifact | Buried in a private repo |
+| "Generalize this to any new build" | The whole point is decoupling from the current project | Anywhere coupled to the current project |
+| "Add it to [other project]" | That other project is the target | The current project |
+
+**The rule:** if the user's framing contains *any* of the above, do not
+default. Ask one question — *where should this live?* — and wait for the
+answer. The cost of one question is seconds. The cost of scaffolding in
+the wrong repo and being told to start over is minutes plus trust.
+
+**"Similar plumbing exists" is not "this belongs there."** If the user is
+working in Omni-Memory and the spec workflow needs Telegram bot access,
+the bot is reached by API, not by editing the bot's source. Same logic
+for any other shared plumbing (DB, env files, auth tokens).
+
+## Design-Only Refactor Confirmation (the "use this design" trap)
+
+A common variant that *looks* like the location-confirmation case but is
+its own failure mode: the user uploads a mockup or screenshot and says
+"use this exact design" without naming a target repo. The default move
+is to apply it to whatever app is open in the conversation. The wrong
+move. Three sub-questions have to be answered before writing any file:
+
+1. **Which repo is the target?** If the conversation was in project A and
+   the user said "use this design" without naming a project, *ask*. They
+   may have meant project B (a related but separate app) or project C
+   (a clone of A that doesn't even exist locally yet). Cloning from
+   GitHub and working in a clean checkout is cheap; rewriting the wrong
+   project and reverting costs minutes plus trust.
+2. **Logic or only visuals?** "Use this design" is ambiguous between
+   "rebuild the front end, keep the backend" and "match this style,
+   touch nothing else." Both are valid interpretations. The right move
+   is to state the assumption in one sentence ("I'll keep all the
+   handlers/state/AI calls untouched and only swap the visual layer —
+   tell me if you want logic changes too") and wait for the green light.
+   Don't ship a logic change under a design ask.
+3. **Which components get the new skin?** The reference may show one
+   screen (e.g. an upload widget), but the target app has five screens.
+   Default to applying the visual rules (palette, radius, shadow,
+   typography) to the whole UI, not just the screen the user showed.
+   Then call that out so the user can scope it down.
+
+**Real incident (2026-06-25, MeetingMind design → wrong project):** The
+user uploaded a Stripe-style "MeetingMind" mockup. The active project
+was MindDrop. I applied the design to `MeetingStudio.tsx` in MindDrop,
+built, committed, and pushed. The user replied "stop!!!!! revert all
+the changes as they are not being applied to the right project. it
+needs to be applied to the video meeting minutes manager, not
+minddrop." I `git checkout`ed the file, cloned the actual target repo
+(`Video-Meeting-Minutes-Manager`), and only then started. Then I
+shipped a full rewrite — until the user clarified "it's only a design
+change, no change in the logic, just new fonts/ buttons, layout. all
+functionalities on that page will remain the same." I had to
+re-examine the second repo's `App.tsx` and rebuild the visual layer
+*without touching any handler or state*. Two full rebuilds instead of
+zero, because the location + scope + scope-of-scope questions were
+never asked.
+
+**The reflex:** when the user shows a mockup and says "use this," your
+first three messages should be:
+
+```
+1. Confirm the target repo: "I'll apply this to <repo> — confirm?"
+2. Confirm the scope:     "Design only, no logic changes — confirm?"
+3. Confirm the breadth:   "Apply the visual rules app-wide, or just
+                           the screen you showed?"
+```
+
+A 3-message confirm costs 30 seconds. A two-build revert costs 10+
+minutes plus the user's patience.
+
+**For the spec-driven-build case specifically** (the live case that
+surfaced this lesson): see the `spec-driven-build` skill — it has a
+dedicated pre-flight check section that operationalizes this rule.
 
 ## Core Principle: Investigate Deeply Before Writing Anything
 
@@ -49,30 +168,45 @@ When the user says "Don't make shortcuts or summarize, go deep in the investigat
 3. Write the spec AFTER the investigation, not during. The spec should be a direct reflection of what you found, with zero approximation.
 4. Lock major decisions (language, framework, service choices) at the top of the spec before writing anything else.
 
-## Path-Collision Pre-Check (CRITICAL — do this BEFORE any `mkdir`)
+## Path-Collision Pre-Check (CRITICAL — do this BEFORE any `mkdir` or `write_file`)
 
 **When a spec specifies literal package paths, the path may already exist as a tracked FILE in the repo.** A naive `mkdir <spec_path>` silently destroys the file. This was a real loss in one session where a spec asked for `hermes/task_contract/` and `hermes` already existed as the CLI launcher script.
+
+**Before any of mkdir, write_file, or patch on the target path, run a 4-step identity check. Skipping this when the user's framing is casual ("go to the MindDrop repo", "implement this spec") is how you clobber unrelated state.**
 
 **The 30-second pre-check, in order:**
 
 ```bash
-# 1. Does the path exist as a file?
+# 1. Does ANY directory match the spec name? (case-insensitive — Linux/macOS are case-sensitive filesystems
+#    so a spec written as "MindDrop" won't match a folder named "minddrop" without -i)
+find ~ -maxdepth 5 -type d -iname "<spec-folder-name>" 2>/dev/null
+
+# 2. For each candidate, is the git remote consistent with the spec's repo?
+#    A folder named "X" with a remote pointing to "obsidian-vault-backup" is NOT the X repo.
+#    It's almost certainly an unrelated workspace mislabeled, OR a vault backup folder.
+cd <candidate> && git remote -v && git log --oneline -3
+# If the remote doesn't match the spec, REFUSE TO WRITE. Ask the user which one is correct.
+
+# 3. Does the path exist as a file?
 stat <spec_path> 2>&1 | head -3
 
-# 2. Is it tracked in git?
+# 4. Is it tracked in git?
 git ls-files <spec_path>
 
-# 3. Are there same-name siblings? (e.g. spec wants dir A/, repo has file A AND dir A_other)
+# 5. Are there same-name siblings? (e.g. spec wants dir A/, repo has file A AND dir A_other)
 ls -la $(dirname <spec_path>) | grep -E "^-" | awk '{print $9}' | grep -E "^<name>$"
 ```
 
 **Decision tree:**
+- If multiple candidates match by name (case-insensitive) → **case-mismatch trap**. The folder with the right *case* is usually the real one; the other is often a vault backup, sibling project, or temp workspace. Verify via git remote.
 - If `stat` shows a file at the parent path AND `git ls-files` confirms it's tracked → **the spec's path collides**. Either:
   - (a) PICK A NON-COLLIDING LOCATION (most common — log the deviation in the package's `__init__.py` and the developer guide)
   - (b) Ask the user before clobbering
   - (c) `git checkout HEAD -- <file>` to restore, then proceed with the new location
 - If `stat` shows a directory → safe to `mkdir` inside
 - If the path doesn't exist → safe to `mkdir -p`
+
+**Real incident (2026-06-24, MindDrop auth bypass):** Spec referenced `benclawbot/MindDrop2-Opencode` (capital M). Local `find -iname` found two folders: `MindDrop2-Opencode/` (the real repo) AND `minddrop2-opencode/` (lowercase m, git remote was `obsidian-vault-backup`, contained 27+ modified vault conversation files). A naive `cd` to the first lowercase match would have clobbered a vault backup. A case-sensitive search would have missed the real repo. **Both behaviors are wrong.** The correct move is case-insensitive discovery + git-remote verification on every candidate.
 
 **Why `mkdir -p` doesn't fail:** it treats the leaf as a new directory and creates the path tree. If a file already exists at the leaf, behavior depends on the shell — `bash` will refuse (good) but the failure happens after the file may have been replaced by the empty directory in some flows. Always run the pre-check.
 
@@ -253,12 +387,60 @@ Key file patterns:
 - **Forgetting the permission system**: macOS has accessibility + screen recording permissions. Windows has equivalent but different names/flows.
 - **Spec path ≠ reality path** (see Path-Collision Pre-Check above). The single most expensive mistake in spec-implementation work.
 - **Trusting `mkdir -p` to fail loudly on a file collision.** It sometimes does, sometimes doesn't, depending on shell and what came before. The pre-check is the only reliable guard.
+- **`git status` lies when `core.fileMode` is unset.** `chmod +x` on an existing tracked file makes git report it as "modified" even though the content is identical. Run `git config core.fileMode false` before any perms audit, or diff `--stat` will show false-positive "M" everywhere. New scripts you add should be chmod +x'd, but existing scripts should not be touched (their perms are intentionally what's tracked).
+- **The "two script versions + README only documents one" trap.** When a repo has parallel scripts (`run-hub.sh` and `hub-pull.sh`, `setup.sh` and `install.sh`, etc.), the README often only documents the canonical one. The undocumented one is usually legacy code that hardcodes an old path. Find it with `search_files` against README references — if it's never mentioned, either update it to match the README's path scheme or delete it. Carrying dead scripts in the repo is worse than deleting them.
+- **Install scripts that block on no-TTY.** `read -p "var: " val` hangs forever in `bash script.sh` from a non-interactive context (CI, cron, piped). `curl` without `--max-time` hangs on bad DNS. From day 1 of writing an install/bootstrap script: (a) gate `read` calls behind an `INTERACTIVE` check (env var, `[ -t 0 ]` for fd 0 being a tty, or both); (b) put `--max-time 5` (or whatever) on every network call; (c) default to non-interactive-friendly behavior so CI doesn't need a special flag.
+- **Local `git clone` made before `gh auth login` has no git creds wired.** Symptom: `gh auth status` is ✓, but `git push origin master` fails with `fatal: could not read Username for 'https://github.com'`. Fix: `gh auth setup-git` wires the gh token into git's credential store globally. Re-push works immediately. Alternative: `git push "https://$(gh auth token)@github.com/owner/repo.git"` for a one-shot.
+- **`nohup` + `&` + `> /tmp/x.log` inside a foreground `terminal()` call is rejected.** Hermes tracks background processes via `background=true`; the shell-level wrappers (`nohup`, `disown`, `setsid`, trailing `&`) are blocked from foreground calls because they break lifecycle tracking. For dev servers / watchers: use `terminal(background=true)` (no `notify_on_complete` for long-lived processes that never exit). For one-shot: just foreground, foreground timeout is generous.
+- **LSP errors inside `/* ... */` blocks ≠ `tsc` errors.** The in-process LSP flags `Cannot find name 'Foo'` even when `Foo` is inside a JSDoc-style block comment. The real `tsc --noEmit` (and the build's `tsc` step) treats `/* */` as a comment and skips it. When typecheck fails with names-from-comments errors, the *real* cause is usually missing types in `node_modules`, not the commented imports. Verify by `git stash` → re-run typecheck → compare counts. Pre vs post must be identical for a clean implementation.
+- **A half-installed `node_modules` produces phantom typecheck errors that vanish after a clean reinstall.** Symptom: `tsc --noEmit` reports 20+ `Cannot find module 'X'` errors for modules that ARE in `package.json` dependencies. First fix attempt is `npm install` — which fails with `ENOTEMPTY: directory not empty, rename '.../node_modules/acorn' -> '.../node_modules/.acorn-XXXXX'`. The only reliable recovery: `rm -rf node_modules package-lock.json && npm install`. Then re-run typecheck — errors drop to zero. Always clean-reinstall before assuming a real typecheck failure.
+
+## README-Driven Install Implementation (variant: spec lives in the README)
+
+A common variant: the user points at a repo's README and says "implement what's needed for [target] and check it works locally." There is no external spec doc — the README is the spec. Same workflow discipline applies, but the source-of-truth reads differently.
+
+**Phase 0: Confirm the README is fetchable and is the canonical spec.** A private repo is the most common friction: `gh auth status` will be X until the token is re-authed, then `gh api /repos/owner/repo` returns metadata (default branch, language, size, pushed_at). `gh api /repos/owner/repo/contents/README.md` returns the file as base64 — decode it. If the repo is 404, it's a typo or the repo doesn't exist; check the user's other repos with `gh api /users/<owner>/repos --jq '.[].name'` and ask which one they meant.
+
+**Phase 1: Audit the README against the actual tree.** The README describes the world as it should be; the tree shows the world as it is. Walk both, and produce a gap table:
+
+| README claim | Reality | Gap |
+|---|---|---|
+| `cd ~/Omni-Memory/hub && npm install` | `hub-pull.sh` hardcodes `$HOME/memory-hub` | Script contradicts README. Fix or delete. |
+| Exports are `Omni-Memory/exports/{device}/` | Collector writes `~/.memory/exports/manifest_{device}_{ts}.json` (flat) | Two different layouts; hub scanner only reads one |
+| Manifests have `file:` paths | Hub reads those paths verbatim | Cross-machine paths break on hub. Fix hub, not collector. |
+| Hub ingest handles 0 events | `merge-events.mjs` throws `Fatal: ENOENT` when exports dir missing | Make the missing-dir case a clean skip, not a fatal exit. |
+| Troubleshooting: `cat .../exports/*/manifest.json` | Files are named `manifest_*.json` | Wrong glob. README bug. |
+
+**Phase 2: Verify with REAL synthetic data, not just "the script exits 0."** `bash install.sh` returning exit 0 is not proof. Proof is: seed a minimal real-shape export → run each pipeline stage → assert the rows landed in the destination. Specifically:
+- After `node merge-events.mjs`, query the destination table: `SELECT COUNT(*), source FROM events GROUP BY source` — assert ≥ 1 row per expected source.
+- Re-run the same command — assert `ingested=0 skipped=N` (dedup works via `event_hash`).
+- If a Telegram bot is part of the pipeline, start it with a fake token and confirm it returns 401 cleanly (proves the network + auth wiring works, just with bad creds).
+- Capture every command's exit code AND the log tail. "Script ran" is not the same as "script did the thing."
+
+**Phase 3: Ship the install path the user actually asked for.** A README that says "clone, then run 7 steps manually" is a spec for an installer. Build the one-shot `install-<target>.sh` that:
+- Checks prereqs (with explicit `command -v` + version checks, not assumptions)
+- Idempotent: re-runs without breaking existing state (don't blow away a populated env file; skip already-set vars)
+- Supports `INTERACTIVE=0` / `NONINTERACTIVE=1` env var for CI
+- Has `--max-time` on every network call (default 5s)
+- Verifies the install worked before claiming success (run the pipeline once, check log, exit non-zero on first failure)
+- Logs to `~/Library/Logs/<app>/` (macOS convention) or `~/.local/share/<app>/logs/` (Linux convention), NOT just stderr
+
+**Phase 4: Update the README in the same commit.** Every code change that closes a gap should also update the README to:
+- Reference the new script (`bash install-mac.sh` in the install section)
+- Document any non-obvious fix (the ENOENT recovery, the recursive walker behavior)
+- Fix factual errors in the README itself (wrong globs, outdated paths)
+- Tick the "what works" checkboxes that are now true
+
+**Phase 5: Commit + push.** Auth check first: `gh auth status`. If git push fails with "could not read Username" even though gh is authed, run `gh auth setup-git` to wire git to the gh token, then retry. Verify the push landed: `gh api /repos/owner/repo/commits --jq '.[0] | {sha, message: .commit.message[0:80]}'`. Then summarize the commit (sha + files changed + what was verified) in the final message — that's the only thing the user has to verify before moving on.
 
 ## Reference Materials
 
 - `references/clicky-macos-to-windows.md` — Full Clicky port: 25-file inventory, subsystem math, VAD params, MiniMax API format, Windows API mappings, locked decisions.
 - `references/spec-implementation-playbook.md` — Detailed playbook for implementing build-ready specs into real codebases: investigation order, spec-vs-reality delta construction, deviation logging, and acceptance-checklist verification patterns.
 - `references/extending-existing-implementation.md` — When the spec is a v2 of a v1 you already shipped: extension-in-place workflow, additive schema changes, regression-net testing, the recorder-setter-mirror-schema gotcha, disabled-by-default pack defaults, and the iterative-test-after-each-module pattern.
+- `references/readme-driven-install.md` — README-as-spec workflow: audit table format, real-data verification recipes, the install-script noninteractive + max-time pattern, and the gh-auth-setup-git gotcha for HTTPS pushes.
+- `references/vendor-swap-in-spa.md` — When the user says "switch from X to Y" for an AI provider, auth, or storage in a deployed frontend. Feature parity audit (which old features have no new-vendor equivalent), service rewrite with shape-preserving signatures, pushback reflex for technically-wrong vendor choices (ChatGPT OAuth, Firebase Auth for local-first). Worked example: 2026-06-24 MindDrop Gemini+Firebase → M2.7+localStorage (76% bundle reduction).
+- `references/design-only-rewrite.md` — When the user shows a mockup and says "use this design" against an existing app. The five-step recipe (palette → surfaces → CTA → status panel → verify), the Tailwind v4 + global-CSS fight (when `index.css` overrides `[type="submit"]`), the "no logic changes" feature audit, and the visual atoms to swap (dropzone, status panel, language toggle, gradient direction).
 
 ## Extending an Existing Implementation (spec is a v2, not v1)
 
@@ -322,7 +504,7 @@ python -m pytest tests/<existing_pkg> -q
 # Expect: same — wiring shouldn't break anything if conditional on config flag
 ```
 
-**Why:** when something breaks, the failure tells you exactly which module caused it. Batch-and-debug at the end is the worst failure mode — three modules added, regression somewhere, no signal which one.
+**Why:** when something breaks, the failure tells you exactly which module caused it. Batch-and-debug at the end is the worst failure mode — three modules added, regression somewhere, no signal where to start.
 
 - **Counter-pattern (don't do this):** write all 10 modules, then "let me run the suite." Now you're staring at 3 failures across modules that all interact and you don't know where to start.
 
@@ -376,7 +558,7 @@ A long extension task can hit the per-session tool-call ceiling. The wrong move 
 
 ## Always-On Default Packs (regression-locked defaults)
 
-When the user says "enable those 3" and the right interpretation is "make them non-negotiable," the move is **lock the default, don't override the toggle.** Three places get updated:
+When the user says "enable those 3" and the right interpretation is "make it non-negotiable," the move is **lock the default, don't override the toggle.** Three places get updated:
 
 1. **The default config YAML** (the in-code `default_config_yaml()` string) gets a comment block listing the always-on vs opt-in packs. Anyone who runs `hermes contract init` sees the policy.
 2. **A regression test** that asserts each always-on pack's `enabled` field is `True` in the default config. Future contributors who try to flip a default fail CI with a message pointing at the policy doc.

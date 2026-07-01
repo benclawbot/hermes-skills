@@ -29,6 +29,25 @@ Invoke `session_search` proactively when:
 ### 4. Failure to proceed
 - If you don't know what to do next and context feels incomplete → search
 
+### 5. **Decisions that may already exist** (CRITICAL — search BEFORE research)
+- The user asks for a vendor URL, API key shape, env var name, model name, or
+  any config value that's been set before
+- A subagent or external tool is about to fetch "the official" answer
+- You're about to guess at a value ("I'll use `api.minimaxi.com`...")
+- The user says "check the one for X" — they expect an existing prior decision
+
+**Always search `~/.hermes/.pi/skill-memory.json` and the session DB first.**
+The lesson is often there. A 5-second `grep -i` beats a 3-minute subagent
+that returns the wrong answer. If you skip this step and the value was
+already known, you've burned tokens and credibility for nothing.
+
+**Anti-pattern:** delegating "find the right API URL" to a subagent when
+`grep -l "minimax" ~/.hermes/.pi/skill-memory.json` would have returned the
+correct base URL in 200ms. Subagents are for tasks the agent can't do
+locally — not for tasks you haven't bothered to look up. The session DB
+covers years of past decisions; the cost of looking is seconds, the cost
+of re-deriving the wrong answer is a broken deploy.
+
 ## Search Strategy
 
 **Be specific** when possible:

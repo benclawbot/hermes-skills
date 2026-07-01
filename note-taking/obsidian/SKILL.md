@@ -1,10 +1,11 @@
 ---
 name: obsidian
-description: Read, search, and create notes in the Obsidian vault. Also covers vault-based skill management; import vault skill notes into Hermes callable skills; audit for broken links after vault moves; manage vault git backup; fix empty-container patterns (templates that record events but never record decisions) by identifying the must-be-non-empty section, auto-seeding it, and curating manually.
-version: 1.2.0
+description: Read, search, and create notes in the Obsidian vault. Also covers vault-based skill management; import vault skill notes into Hermes callable skills; audit for broken links after vault moves; manage vault git backup; fix empty-container patterns (templates that record events but never record decisions) by identifying the must-be-non-empty section, auto-seeding it, and curating manually; troubleshoot Obsidian performance (bad plugins, slow graph view) on low-RAM machines. Use when Thomas says "find patterns in my notes", "what's hiding in my vault", "analyze my Obsidian", "build a site from my notes", "fix the empty containers", "fix the tag explosion", "what the vault would need to look different", "implement the [theme N] fix", "obsidian is slow", "obsidian is using too much RAM", "graph won't load", "obsidian crashed" — for understanding the *shape* of a corpus rather than retrieving a specific fact.
+tags: [obsidian, note-taking, vault, skills, backup, empty-container, pattern-mining, taxonomy, performance]
+version: 1.4.0
 metadata:
   hermes:
-    tags: [obsidian, note-taking, vault, skills, backup, empty-container]
+    tags: [obsidian, note-taking, vault, skills, backup, empty-container, pattern-mining, taxonomy, performance]
     related_skills: [save-session-to-obsidian, memory-vault]
 ---
 
@@ -28,9 +29,9 @@ After any vault move, run through `references/vault-migration-audit.md` — cove
 
 ---
 
-## Application Launch (Linux / Snap)
+## Application Launch (Linux / .deb extract)
 
-Obsidian is installed as a Snap package on Thomas's machine. If the app fails to start, use this troubleshooting path.
+Obsidian is installed on Thomas's machine as an extracted `.deb` at `/opt/obsidian/obsidian` (NOT a snap — the snap route was abandoned because of confinement breakage on this host). The wrapper at `~/.local/bin/obsidian` exec's it with `--disable-gpu` (still required on the Haswell GPU).
 
 ### Failure Mode A — GPU crash (classic Haswell)
 **Symptoms:** Window appears then crashes immediately, or `GPU process isn't usable. Goodbye.` in stderr.
@@ -39,53 +40,31 @@ Obsidian is installed as a Snap package on Thomas's machine. If the app fails to
 
 **Fix — GPU flags:**
 ```bash
-snap run obsidian --disable-gpu --disable-software-rasterizer
+obsidian --disable-gpu --disable-software-rasterizer
 ```
 - `--disable-gpu` — disable GPU hardware acceleration
 - `--disable-software-rasterizer` — disable SwiftShader fallback (prevents secondary crash)
 
-### Failure Mode B — Snap exits silently (current, May 2026)
-**Symptoms:** `snap run obsidian` exits with code 1 and no window, no error output. The process runs for ~1 second then dies.
+The wrapper at `~/.local/bin/obsidian` already passes `--disable-gpu`. Do NOT add `--disable-software-rasterizer` to the wrapper unless Mode A is firing — it disables legitimate CPU rasterization paths and degrades rendering.
 
-**Root cause:** Snap environment or confinement issue — not a GPU crash. The `--disable-gpu` wrapper no longer helps because the snap launcher itself is broken in this environment.
-
-## Failure Mode B — Snap Exits Silently (May 2026)
-
-`snap run obsidian` exits with code 1, no window, no error output. Process dies cleanly in ~1 second. No GPU crash message.
-
-**Root cause:** Snap environment/confinement breakage — not a GPU issue. GPU flags no longer help. The snap binary itself cannot launch the Electron process.
-
-**Fix — Replace snap with official .deb extract:**
-
-> The `.tar.gz` asset does not exist in the GitHub releases. Use the `.deb` package and extract it — no dpkg install needed.
+### Install path notes (already done on this host, do not re-run)
 
 ```bash
-# 1. Remove snap (requires sudo)
-sudo snap remove obsidian
-
-# 2. Download official .deb
+# Install (only if /opt/obsidian doesn't exist):
 cd /tmp
 curl -L https://github.com/obsidianmd/obsidian-releases/releases/download/v1.12.7/obsidian_1.12.7_amd64.deb -o obsidian.deb
-
-# 3. Extract deb (no dpkg install — just unpack)
 mkdir -p obsidian_extract
 dpkg-deb -x obsidian.deb obsidian_extract
 sudo rm -rf /opt/obsidian
 sudo mv obsidian_extract/opt/Obsidian /opt/obsidian
+rm -f ~/Desktop/obsidian_obsidian.desktop  # stale snap-era shortcut
 
-# 4. Fix old snap desktop shortcut left on desktop
-rm -f ~/Desktop/obsidian_obsidian.desktop
-
-# 5. Wrapper (preserves --disable-gpu for GPU stability on Haswell)
-#    Binary name is lowercase 'obsidian', not 'Obsidian'
 cat > ~/.local/bin/obsidian << 'EOF'
 #!/bin/bash
 exec /opt/obsidian/obsidian --disable-gpu "$@"
 EOF
 chmod +x ~/.local/bin/obsidian
 
-# 6. Desktop entry
-#    Icon path is resources/icon.png, not resources/obsidian.png
 cat > ~/.local/share/applications/obsidian.desktop << 'EOF'
 [Desktop Entry]
 Name=Obsidian
@@ -98,17 +77,14 @@ MimeType=x-scheme-handler/obsidian;
 Categories=Office;
 EOF
 chmod +x ~/.local/share/applications/obsidian.desktop
-
-# 7. Pin to desktop
 cp ~/.local/share/applications/obsidian.desktop ~/Desktop/obsidian.desktop
 chmod +x ~/Desktop/obsidian.desktop
 ```
 
-**Three critical path corrections vs older docs:**
+**Three critical path corrections:**
 - Binary: `/opt/obsidian/obsidian` (all-lowercase) — extracted directory is `Obsidian` (capital O) but the executable inside is `obsidian`
 - Icon: `resources/icon.png` — not `resources/obsidian.png`
 - GPU flag: `--disable-gpu` still needed on Haswell even with the direct install
-> **GPU flag:** `--disable-gpu` is still needed on this Haswell system even with the tarball install.
 
 ### Verification
 ```bash
@@ -118,6 +94,109 @@ ps aux | grep obsi | grep -v grep
 ```
 
 See `references/app-launch-troubleshooting.md` for reproduction commands and extended diagnostics.
+
+---
+
+## Performance troubleshooting (slow launch, high CPU/RAM)
+
+**Trigger:** Obsidian feels slow to open, the renderer process pegs CPU, or RAM usage is disproportionate to vault size. Common on low-RAM machines (3 GB class) running any vault > ~500 notes.
+
+### Diagnostic — first 30 seconds
+
+```bash
+# 1. Confirm the app is the problem, not the kernel
+free -h                                          # total RAM, used, swap
+ps aux --sort=-%mem | head -15                   # top RSS consumers
+ps aux | grep obsi | grep -v grep                # every obsidian process
+```
+
+**Interpretation:**
+- Renderer (`--type=renderer`) at 80–100% CPU almost always = a community plugin in a hot loop
+- RSS > 800 MB on a renderer process = graph view or a heavy plugin
+- Swap activity (`vmstat 1` shows `si`/`so` > 0) = you're RAM-bound; disable features until it's quiet
+
+### Bad community plugin — the most common cause
+
+**Symptoms:** renderer pinned at high CPU, app slow to switch panes, vault navigation laggy. Often one specific plugin (graph renderers, dataview with huge queries, kanban boards over hundreds of cards).
+
+**Diagnosis:**
+
+```bash
+VAULT="${OBSIDIAN_VAULT_PATH:-$HOME/Desktop/Memory}"
+cat "$VAULT/.obsidian/community-plugins.json"
+echo "---installed---"
+for p in $(cat "$VAULT/.obsidian/community-plugins.json" | python3 -c "import json,sys; print('\n'.join(json.load(sys.stdin)))"); do
+  echo "=== $p ==="
+  cat "$VAULT/.obsidian/plugins/$p/manifest.json" 2>/dev/null
+  echo
+done
+```
+
+**Red flags in any plugin manifest:**
+- `minAppVersion` is years old (e.g. `0.15.0` on Obsidian 1.12.x) — likely abandoned, may not be bridged to current API
+- `isDesktopOnly: false` for a heavy graph/canvas feature — Electron-vs-mobile shim overhead
+- Description mentions "3D", "graph visualization", "force-directed" — known to peg renderers on big vaults
+- `main.js` > 1 MB — usually a feature-heavy plugin with multiple heavy subsystems
+
+**Fix (preserves plugin files for re-enable):**
+
+```bash
+VAULT="${OBSIDIAN_VAULT_PATH:-$HOME/Desktop/Memory}"
+echo "[]" > "$VAULT/.obsidian/community-plugins.json"
+# Restart Obsidian. Re-enable one plugin at a time to isolate.
+```
+
+**Hard rule for low-RAM machines (3 GB class):** any plugin whose `main.js` > 500 KB OR whose `minAppVersion` is more than ~18 months old should be treated as suspect. Re-enable one-at-a-time after a fix and verify with `ps aux --sort=-%mem` between each.
+
+### Graph view is slow — graph.json tuning
+
+**Symptoms:** opening the graph view hangs for 10+ seconds, panning is janky, or it pegs CPU continuously.
+
+**Root causes (in order of impact):**
+1. `showOrphans: true` — every file with zero links becomes a node. On a vault with hundreds of orphans (or a fresh migration), this can double the node count.
+2. `hideUnresolved: false` — every broken link target becomes a node. Large vaults accumulate hundreds of these.
+3. `showArrow: true` — arrowheads double the edge-draw cost (draw arrowhead + line).
+4. `showAttachments: true` — every image/PDF in the vault becomes a node.
+5. `textFadeMultiplier` and friends — per-frame blending work; default `0` is fine, anything non-zero adds load.
+
+**Minimal-perf `graph.json` for a vault > 1000 notes:**
+
+```json
+{
+  "collapse-filter": true,
+  "search": "",
+  "showTags": false,
+  "showAttachments": false,
+  "hideUnresolved": true,
+  "showOrphans": false,
+  "collapse-color-groups": true,
+  "colorGroups": [],
+  "collapse-display": false,
+  "showArrow": false,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": true,
+  "centerStrength": 0.5,
+  "repelStrength": 10,
+  "linkStrength": 1,
+  "linkDistance": 250
+}
+```
+
+Located at `$VAULT/.obsidian/graph.json`. Obsidian reads it on next open. If still slow after the cuts, the vault size itself is the ceiling — measure which folders dominate (`du -sh $VAULT/*/ | sort -h | tail`) and consider splitting or archiving the heaviest.
+
+### Verification after a fix
+
+```bash
+# RAM should drop substantially
+free -h
+
+# No obsidian process should be at >30% CPU at idle
+ps aux | grep obsi | grep -v grep
+```
+
+See `references/performance-troubleshooting.md` for the full diagnostic recipe and known-bad plugin patterns.
 
 ---
 
@@ -168,6 +247,7 @@ ENDNOTE
 ```bash
 VAULT="${OBSIDIAN_VAULT_PATH:-$HOME/Documents/Obsidian Vault}"
 echo "
+
 New content here." >> "$VAULT/Existing Note.md"
 ```
 
@@ -481,3 +561,215 @@ print(f"Files with broken links: {len(broken_by_file)}")
 for fpath, links in sorted(broken_by_file.items(), key=lambda x: -len(x[1]))[:20]:
     print(f"  [{len(links):3d}] {fpath}")
 ```
+
+---
+
+## Vault Pattern Mining — surface the shape of the corpus
+
+After 1+ years of a vault, the writer usually cannot answer "what is this corpus actually about?" — because the answer is structural, not topical. This subsection covers the pattern-analysis + theme-site + structural-fix loop that produces a multi-page static website (one page per emerging theme) and optionally implements the prescriptive fixes.
+
+**When to use:** "find patterns in my notes", "what's hiding in my vault", "analyze my Obsidian", "hidden patterns", "themes in my writing", "surface what my notes actually say", "build a site from my notes", "what the vault would need to look different", "fix the empty containers", "fix the tag explosion", "implement the [theme N] fix".
+
+**When NOT to use:** the user wants to retrieve a specific fact from the vault (use the read/search sections above), generate a new research vault (use `deep-research-obsidian`), or build a single static diagram of a system (use `architecture-diagram`). Below ~50 notes, pattern detection has too little volume — just open the files.
+
+### What the analysis surfaces
+
+- **Hub notes** (most-linked-to files = the gravitational center of a cluster)
+- **Tag taxonomy decay** (the same concept written N ways until retrieval fails)
+- **Schema drift** (frontmatter conventions that diverged without anyone noticing — bilingual, multi-era, multi-source corpora)
+- **Content-vs-template gaps** (places where the *shape* of a note exists but the *substance* never got written) — see the "Empty-container pattern" section above for the dedicated fix
+- **Cross-domain bridges** (notes that connect otherwise-separate clusters)
+- **Identity-level patterns** (what the writer argues with themselves about — opposition-rich notes, first-person vs. third-person, recurring self-instruction)
+
+Output is a multi-page static website, one page per emerging theme, with data visualizations (bar charts, tables, hub lists, timelines) and direct quotes from the source notes as evidence. The site is meant to be read top-to-bottom: index gives the shape, each theme page goes deep.
+
+### Workflow (6 phases + optional Phase 7 fix)
+
+#### Phase 1 — Inventory walk
+
+Walk the vault, count by top-level folder, skip `.git`/`.obsidian`/`.trash`/node_modules. Report shape before analyzing.
+
+```bash
+cd /home/thomas/Desktop/Memory  # or wherever
+find . -name "*.md" -not -path "./.git/*" -not -path "./.obsidian/*" -not -path "*/.obsidian/*" -not -path "*/pages/*" | wc -l
+# (note: many vaults put leaf content under pages/ — count that too)
+find . -name "*.md" -not -path "./.git/*" -not -path "./.obsidian/*" | wc -l
+```
+
+**Pitfall:** Leaf notes are often inside `pages/` or `_Lot*_*` subfolders, not at the cluster root. The first count is misleading. Use the second.
+
+#### Phase 2 — Parse frontmatter
+
+Most personal vaults have frontmatter, but the schema drifts over time and across languages. Build a parser that handles BOTH strict YAML and loose fallback. The bundled analyzer `scripts/analyze_vault.py` is the generalized version of the 2026-06-02 run — edit the `VAULT` constant at the top, then:
+
+```bash
+uv run --with pyyaml python3 scripts/analyze_vault.py
+```
+
+Outputs go to `/tmp/vault_analysis/summary.json` and `notes.json`. The script handles bilingual frontmatter, loose YAML, empty `strong_links` entries, and skips `.git`/`.obsidian`/`.trash`/`node_modules` by default.
+
+Key fields to extract per note:
+- `title`, `type`, `cluster`, `importance`
+- `tags` (as a list — handle `[a, b]` AND `a, b` AND YAML list blocks)
+- `strong_links` / `liens_forts` / equivalent (the per-note link field, regardless of language)
+- `opposition_links` / `liens_opposition` / equivalent
+- `sources_count` (signal of web-research vs. internal-summary)
+- `word_count` of body
+
+**Pitfall:** Bilingual vaults have TWO different schemas. The 2026-06-02 vault had `strong_links` (English) and `liens_forts` (French). Treat them as the same field, with a per-language key map. Same for `title`/`titre`, `created`/`créé`, etc. **Gating check:** if the parser silently produces `None` for the link field on more than 20% of notes, you have a schema-drift problem and Phase 2 must be reworked before any of Phase 3 makes sense.
+
+**Pitfall:** Some `strong_links` entries are `[]` or `['']`. Guard with `if not link: continue` before indexing. The first run of the analyzer crashed on this exact bug.
+
+#### Phase 3 — Pattern detection (the 7 lenses)
+
+Apply these analyses in order. Each one tends to surface one or more themes:
+
+1. **Tag frequency distribution.** Top 40 tags. Shape of the tail: how many singletons? 1,228 of 1,585 tags appearing exactly once is a tell. Tag-frequency > 50, > 20, > 10, > 5, > 2, == 1.
+2. **Note-type and cluster breakdown.** What kinds of notes exist (concept/sector/company/methodology/...) and which clusters dominate?
+3. **Hub detection (in-degree).** For each note, count how many `strong_links` from other notes point at it. Top 25 is the hub structure. A single note with 79+ inbound links is the gravitational center of a cluster.
+4. **Cross-domain bridges.** Edges where source-cluster ≠ target-cluster. These are the most informative — they show which notes connect otherwise-separate parts of the corpus.
+5. **Opposition density.** Notes with the highest count of `opposition_links` are the most-contested. In a personal corpus, this is often where the writer is arguing with themselves — high opposition density = expert-level self-awareness of where the field is wrong.
+6. **Bilingual content sampling.** Read 5-10 notes from each cluster. Look for register differences: first vs. third person, present vs. past tense, prescriptive vs. descriptive, language distribution. The 2026-06-02 vault split cleanly: English = encyclopedic third-person, French = first-person emotional.
+7. **Empty-container check.** Walk the directory tree for files matching known "container" patterns (e.g., `Conversations/YYYY/YYYY-MM/YYYY-MM-DD.md` with the same template). Count files where the template is present but the body is empty. This is often the most striking finding.
+
+#### Phase 4 — Theme selection (5-8 themes)
+
+Patterns from Phase 3 cluster into themes. Each theme must have:
+- **Quantitative evidence** (a number, a chart, a ranking)
+- **Qualitative evidence** (at least one direct quote from a source note)
+- **A reading** (what it means — not just what the data shows, but what it suggests)
+- **A "what the vault would need to look different"** section (the prescriptive payoff)
+
+Order themes by signal strength, not chronology. The 2026-06-02 ordering was:
+1. Core narrative (highest signal — explains the rest)
+2. Structural (how the vault is shaped)
+3. Deep research (the most-engineered cluster)
+4. Emotional core (the writer's relationship to their work)
+5. Taxonomy decay (technical debt)
+6. Identity (longest-running tension)
+7. Observability (the meta-finding — usually saved for last because it explains why the other findings exist)
+
+#### Phase 5 — Build the site
+
+**Architecture:**
+```
+/path/to/output/
+├── index.html              (hero + stat block + 7 theme cards)
+├── themes/
+│   ├── 01-theme-name.html
+│   ├── 02-theme-name.html
+│   └── ...
+└── assets/
+    ├── style.css           (one file, all themes inherit)
+    └── app.js              (IntersectionObserver scroll animations)
+```
+
+**Design language:** Dark editorial. Recommended:
+- Background `#0a0b0d`, ink `#e8eaf0`, dim `#8a8f9e`
+- One accent color per theme, defined as `--theme-accent` in each page's `<style>` block
+- Serif: Fraunces (300/400 weight, italic for emphasis)
+- Sans: Inter (300/400/500)
+- Mono: JetBrains Mono (for stat numbers, tag clouds, code)
+- Sticky nav, blurred backdrop
+- Hero with stat block, then per-theme page with hero + body + source-notes tag cloud
+- Footer with prev/next theme link
+
+The bundled `templates/pattern-site-theme.html` is the per-theme-page starter (nav, hero, lede pull-quote, body with data viz blocks, two-column comparisons, source-notes tag cloud, prev/next footer). Replace `{{TEMPLATE_VARS}}` and the body content per theme.
+
+**Data viz primitives:**
+- `.bars` — vertical bar chart with animated fill on scroll
+- `.hubs` — grid of hub notes with staggered fade-in
+- `.timeline` — left-rail vertical timeline with dot markers
+- `table` — for raw data dumps
+- `.pull` — large editorial pull-quote
+- `.tag-cloud` — pill list with `.alt` variant for highlighted tags
+
+**Animation:** IntersectionObserver. When a section enters viewport, add `.visible` class, which triggers CSS transitions on `.bar-fill` (animates `width`), `.hub` (staggered fade), and `.observe` blocks (fade + slide up).
+
+**Critical:** Before telling the user the site is ready, run the verification protocol:
+
+```bash
+# 1. Start server with background=true (NOT nohup — that gets blocked)
+#    in one tool call
+# 2. In a separate tool call, run the curl checks
+sleep 1
+for path in /index.html /themes/01-...html /assets/style.css /assets/app.js; do
+  curl -s -o /dev/null -w "$path: %{http_code}  Size: %{size_download}\n" \
+    http://localhost:PORT$path
+done
+# 3. Stability check after 5s
+sleep 5
+curl -s -o /dev/null -w "stable: %{http_code}\n" http://localhost:PORT/index.html
+# 4. HTML structure sanity: each page should have 1 DOCTYPE, ≥1 stylesheet ref, </html> close
+```
+
+**Pitfall — background process:** Use `terminal(background=true, notify_on_complete=false)` for the server. Do NOT use `nohup ... &` in foreground mode — Hermes blocks shell-level background wrappers. Long-lived servers are silent; that's correct.
+
+**Pitfall — DO render check:** A `curl` returning 200 with non-zero size is NOT the same as the page actually rendering. If browser tools are available, use `browser_navigate` to confirm. If browser tools time out (60s), that's a tool issue not a server issue — verify with curl and process polling.
+
+#### Phase 6 — Publish (push to private GitHub repo + deploy to Vercel)
+
+After the user says "push to a private repo" or "publish to Vercel" (or both), do the GitHub side first, then Vercel. **Full step-by-step including all observed pitfalls lives in `references/pattern-site-deploy-recipe.md`** — read that file before deploying. The condensed version:
+
+1. **GitHub:** `git init -b main` → `git add -A` → `git commit -m "Initial site: ..."` → `gh repo create <name> --private --source=. --remote=origin --description "..." --push`. Verify with `gh repo view <name> --json name,visibility,url` (must show `"PRIVATE"`).
+2. **Vercel CLI:** `npm install -g vercel`. Binary lands at `/home/thomas/.local/lib/nodejs/node-v22.x.x-linux-x64/bin/vercel` — not on PATH automatically; `export PATH="..."` at the start of each session.
+3. **CRITICAL first step — unset the env-var token trap:** `unset VERCEL_TOKEN`. The `~/.bashrc` exports a token that is often a *literal placeholder* (`vcp_6N...DljE` with real `...` in the middle, or a redacted string with `*`s). If unset is skipped, the CLI silently reads it and fails with confusing "scope"/"invalid token"/"must not contain *" errors, and the device-flow prompt never appears. Always unset.
+4. **Device-flow login:** `vercel login <email>`. The CLI prints a URL like `https://vercel.com/oauth/device?user_code=XXXX-YYYY`. **Hand that URL + code to the user and wait for them to click Verify.** Run in background with `notify_on_complete=true` and `process(action='wait')` to block. Codes expire in ~5 minutes — re-run if the user is AFK.
+5. **Deploy:** `cd /path/to/site && vercel deploy --yes --prod`. Watch for `▲ Production  https://<name>-<hash>-<scope>.vercel.app` and `▲ Aliased  https://<name>.vercel.app`. Both should resolve to the same deployment. Accept the GitHub auto-deploy prompt.
+6. **Verify:** curl all paths (`/`, every theme page, both assets), expect 200 + non-zero size. Re-check after 3s. Don't trust "Ready" without curl confirmation.
+7. **Cleanup:** kill the local dev server (`process(action='kill', session_id=...)`) so port 8765 doesn't stay bound.
+
+The full pitfall table (env-var trap, `*` glob expansion, browser timeouts on localhost, wrong team scope, `gh` name collisions, build-hangs from stuck tokens) is in `references/pattern-site-deploy-recipe.md` § 3.
+
+### Anti-patterns to avoid
+
+- **Don't analyze without inventorying first.** A pattern detector running blind on 1,137 files will surface noise. Inventory gives the lay of the land and prevents you from over-indexing on a single cluster.
+- **Don't surface themes without evidence.** Every theme needs a chart, a table, a quote, or a count. A theme is "the corpus says X" — without data, it's "I felt like X."
+- **Don't skip the bilingual/multi-schema check.** Half of personal vaults are written in two eras, two languages, or two contexts. A single-schema parser will silently lose half the corpus.
+- **Don't build the site before the themes are written.** Theme pages are evidence-driven. If the evidence isn't there, the theme isn't there. Better to ship 4 strong themes than 7 weak ones.
+- **Don't render the site through Markdown-to-HTML converters.** The visual system is bespoke. Hand-write the HTML. md-to-webpage will produce something legible but uninspiring.
+- **Don't open the browser to "verify" the site rendered correctly if it might time out.** Curl + process status is the actual verification. Browser is the polish check, not the gate.
+
+#### Phase 7 — Implement the structural fixes (the payoff path)
+
+The site/analysis is the diagnosis. The structural fix is the cure. Most users who get the analysis will next ask "now implement the fix" — typically by quoting the analysis's "What the vault would need to look different" section verbatim.
+
+**Triggers for Phase 7:**
+- "implement the [theme] fix" / "fix the [theme]"
+- "what the vault would need to look different" (quoting the analysis template)
+- "make the empty containers not empty"
+- "fix how we store conversations" / "fix the tag explosion"
+- "do the 3-pass fix" / "consolidate the taxonomy"
+- "now actually fix it" (after a Phase 5 site was built)
+
+**The fix-implementation loop has 4 sub-steps, repeated per theme** — see `references/pattern-fix-implementation.md` for the full pattern: read the prescriptive section, map the fix to the right layer (skill / frontmatter / content), write the fix as an idempotent migration script (must produce 0 changes on a second run), verify by re-running the analyzer.
+
+The 2026-06-02 Memory vault ran 3 separate fix passes (themes 05, 07, and the meta-finding `AI/empty-containers-fix.md`) before re-running the analyzer to confirm. Theme 07 in particular hits the **Empty-container pattern** section above — that's the same fix at the skill layer (`save-session-to-obsidian` v1.4+ auto-detects decisions).
+
+### Worked output (concrete)
+
+The 2026-06-02 run on the Memory vault produced:
+- 1 index page (8.9 KB)
+- 7 theme pages (10–15 KB each)
+- 1 shared CSS (12.9 KB), 1 shared JS (0.7 KB)
+- 7 emerging themes, each with: quantitative evidence, qualitative quotes, a reading, a prescriptive "what the vault would need to look different" section, and a source-notes tag cloud
+- Total: 8 HTML files, 1 CSS, 1 JS, all returning 200 with stable load
+- Published: private GitHub repo (`vault-hidden-patterns`) + Vercel production (`https://vault-patterns.vercel.app`), auto-deploy wired
+
+The themes surfaced:
+1. The Builder in Search of an Exit (32 projects, ~21 empty)
+2. The Bilingual Knowledge Architect (2 schemas, 2 languages, 2 cognitive registers)
+3. The Semiconductor Obsession (1 hub note with 79 inbound links)
+4. The Trader Fighting Himself (357 trading-bots notes, mostly about not being human)
+5. The 1,585-Tag Explosion (77% of unique tags appear exactly once)
+6. The PM Who Wants to Stop PM-ing (the most complete corpus = the field he wants to escape)
+7. The Empty Containers (17/17 conversation files with "Log: [empty]")
+
+### Pitfall — long-running deploy process leaks stale state
+
+After Vercel auth via device flow, the login subprocess runs in the background. If the parent session restarts or the login is killed mid-flight, an old `Background process completed` notification may arrive *after* the deploy has succeeded. Don't mistake the late notification for a fresh failure — verify with `gh repo view` and `curl` on the production URL, not by reading the stale process log.
+
+**Tells:** process notification has exit_code=-15 (SIGTERM) or `-9` (SIGKILL), AND the deploy URL is already 200, AND `git log` shows the push commit. The session is fine; the notification is post-hoc.
+
+(See Phase 6 / `references/pattern-site-deploy-recipe.md` for the deploy side; this pitfall is the
+"the deploy is done but the terminal notification says otherwise" failure mode.)

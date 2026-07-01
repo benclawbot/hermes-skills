@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<!--
+site-template.html — copy and modify for a single theme page.
+
+Source: the 7 theme pages built on 2026-06-02 for the Memory vault analysis
+(/home/thomas/Desktop/vault-patterns/themes/0N-*.html). This file is the
+template Thomas reproduces with modifications when building a new theme
+page on a different vault.
+
+REPLACE before publishing:
+  - {{THEME_NUMBER}}             e.g. "01"
+  - {{THEME_SLUG}}               e.g. "builder-in-search-of-exit"
+  - {{THEME_TITLE_LINE_1}}       e.g. "The Builder in Search"
+  - {{THEME_TITLE_LINE_2}}       e.g. "of an Exit"   (omit or change for one-line titles)
+  - {{THEME_ACCENT_HEX}}         e.g. "#d4ff4f"   (matches the index card border color)
+  - {{THEME_BLURB}}              1-2 sentence lede (visible in nav and meta)
+  - {{HERO_PARA}}                hero body — one paragraph, <strong> the bold parts
+  - {{PULL_QUOTE_HTML}}          the large editorial pull-quote; spans can use <br>
+  - All body content between the {{BODY_START}} / {{BODY_END}} markers
+
+VISUAL SYSTEM (do not modify):
+  - colors / typography / spacing live in assets/style.css
+  - scroll animation lives in assets/app.js
+  - The :root { --theme-accent: ... } override at the top of <style> sets
+    the accent color for this single page only.
+
+REFERENCE: see ../index.html for the matching index-card style.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{THEME_NUMBER}} — {{THEME_TITLE_LINE_1}} {{THEME_TITLE_LINE_2}}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;1,9..144,300;1,9..144,400&family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../assets/style.css">
+  <style>:root { --theme-accent: {{THEME_ACCENT_HEX}}; }</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-brand"><a href="../index.html"><strong>VAULT</strong> · HIDDEN PATTERNS</a></div>
+  <div class="nav-links">
+    <a href="../index.html#themes">All themes</a>
+    <a href="{{PREV_THEME_LINK}}">← {{PREV_THEME_LABEL}}</a>
+    <a href="{{NEXT_THEME_LINK}}">{{NEXT_THEME_LABEL}} →</a>
+  </div>
+</nav>
+
+<section class="theme-hero" style="--theme-accent: {{THEME_ACCENT_HEX}};">
+  <div class="theme-hero-content">
+    <a href="../index.html" class="back-link">← BACK TO INDEX</a>
+    <div class="eyebrow">THEME {{THEME_NUMBER}}</div>
+    <h1>{{THEME_TITLE_LINE_1}}<br>{{THEME_TITLE_LINE_2}}</h1>
+    <p>{{HERO_PARA}}</p>
+  </div>
+</section>
+
+<div class="theme-body">
+
+{{PULL_QUOTE_HTML}}
+
+{{BODY_START}}
+
+<!-- BODY TEMPLATE PATTERNS — copy any of these into your theme -->
+
+<!-- h3 section heading -->
+<h3 class="observe">Section heading</h3>
+<p>Plain prose paragraph. <strong>Bold</strong> inline emphasis for key terms.</p>
+
+<!-- two-col comparison -->
+<div class="two-col observe">
+  <div>
+    <div class="col-label">LEFT SIDE LABEL</div>
+    <ul>
+      <li><strong>Item 1</strong> — short description</li>
+      <li><strong>Item 2</strong> — short description</li>
+    </ul>
+  </div>
+  <div>
+    <div class="col-label">RIGHT SIDE LABEL</div>
+    <ul>
+      <li><strong>Item 1</strong> — short description</li>
+    </ul>
+  </div>
+</div>
+
+<!-- data viz block (bar chart) -->
+<div class="viz observe">
+  <div class="viz-title">CHART TITLE</div>
+  <div class="bars">
+    <div class="bar-row">
+      <span class="bar-label">label 1</span>
+      <span class="bar-track"><span class="bar-fill" data-w="80"></span></span>
+      <span class="bar-num">123</span>
+    </div>
+    <div class="bar-row">
+      <span class="bar-label">label 2</span>
+      <span class="bar-track"><span class="bar-fill" data-w="40"></span></span>
+      <span class="bar-num">45</span>
+    </div>
+  </div>
+  <div class="viz-caption">caption · source · n=X</div>
+</div>
+
+<!-- data viz block (table) -->
+<div class="viz observe">
+  <div class="viz-title">TABLE TITLE</div>
+  <table>
+    <thead>
+      <tr><th>Col 1</th><th>Col 2</th><th>Col 3</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>cell</strong></td><td>data</td><td>data</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- blockquote from a source note -->
+<blockquote>Direct quote from a source note.<br><br>
+<span style="font-style: normal; color: var(--ink-dim); font-size: 1rem;">— Note Title</span></blockquote>
+
+<!-- pull-quote (large editorial) -->
+<div class="pull observe">A short, punchy line. <span class="accent">Italic emphasis on the key word.</span></div>
+
+<!-- timeline (for chronological themes) -->
+<div class="timeline observe">
+  <div class="tl-item">
+    <div class="tl-date">DATE / LABEL</div>
+    <div class="tl-title">Step title</div>
+    <div class="tl-text">Description.</div>
+  </div>
+</div>
+
+<!-- ordered list (for "what the vault would need") -->
+<ol style="color: var(--ink-dim); padding-left: 1.5rem; max-width: 60ch; margin: 0 0 1.5rem 0;">
+  <li style="margin-bottom: 0.8rem;">First step</li>
+  <li style="margin-bottom: 0.8rem;">Second step</li>
+</ol>
+
+<!-- source-notes tag cloud (always at the bottom) -->
+<h3>Source notes</h3>
+<div class="tag-cloud observe">
+  <span class="tag">Path/To/Note.md</span>
+  <span class="tag alt">+ N other notes</span>
+</div>
+
+{{BODY_END}}
+
+</div>
+
+<footer>
+  <div>{{THEME_NUMBER}} / 07 · {{THEME_TITLE_LINE_1}} {{THEME_TITLE_LINE_2}}</div>
+  <div class="right"><a href="{{NEXT_THEME_LINK}}">NEXT: {{NEXT_THEME_LABEL}} →</a></div>
+</footer>
+
+<script src="../assets/app.js"></script>
+</body>
+</html>

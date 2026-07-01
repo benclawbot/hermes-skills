@@ -113,6 +113,27 @@ Example:
 - **using `clarify` tool `choices=[{value:'...'}]` dicts** — schema is `List[str]`, model emits dicts, gateway's `str(c)` renders `"{'value': '...'}"` literals in the message body. Always pass plain strings. See `tool-call-harness-repair/references/mode-19-list-of-dicts.md`.
 - **trusting `clarify` inline-keyboard buttons in Telegram** — the gateway often drops `reply_markup` and the question arrives as plain text. Don't assume button-tap capture works; the user may type a free-form answer.
 
+## Spec handoff protocol (post-`writing-plans`)
+
+When you write an implementation plan with `writing-plans` and it ends with an "Open Questions" section, the **spec handoff is the discovery flow**, not a separate phase. The user reading the plan file does NOT mean they've decided — they want to triage each question in turn.
+
+**Wrong** (the bug, observed 2026-06-26):
+- Plan saved. End of message says "5 open questions, what do you think?"
+- User replies "what?" because the questions are buried in a plan file they haven't read yet.
+
+**Right:**
+1. Save the plan.
+2. In your reply, list the open questions in chat as a short ordered list (one line each, no full question text yet).
+3. After the user acknowledges ("ok", "8", "yes"), call `clarify(question="...", choices=[...])` for **question 1 only**.
+4. After each answer, capture the decision, then call `clarify()` for the next one.
+5. After the last answer, update the spec file with the locked-in decisions, then offer the execution handoff.
+
+**Critical:** do NOT bundle all 5 questions into one `clarify()` call. Do NOT paste the whole "Open Questions" section verbatim into chat as if the user has already read the plan file. The point of `one-question-at-a-time` is that the user decides each question individually in context — context they only have if you deliver the question fresh.
+
+**Defaults are fine to state up front** ("defaults are X if you don't have a preference") so the user can answer "defaults" once and you're done, but the questions still go one at a time through `clarify()` so the user has a chance to override any single one.
+
+**Telegram-specific:** since the gateway often drops `clarify` inline-keyboard reply_markup, expect the user to reply as plain text. That's fine — read the free-form answer against the question's choice list.
+
 ## When to NOT use this mode
 
 `one-question-at-a-time` is the wrong surface when the user is

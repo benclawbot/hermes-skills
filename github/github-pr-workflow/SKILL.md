@@ -290,6 +290,7 @@ echo "Authenticated as: $GH_USER (method: $GH_AUTH_METHOD)"
 | `git push` asks for password | GitHub disabled password auth. Use a personal access token as the password, or switch to SSH |
 | `remote: Permission to X denied` | Token may lack `repo` scope — regenerate with correct scopes. **If gh shows a valid account but push still 403s**, the token is valid but the account lacks write access to this specific repo. Fall back to fork workflow. |
 | `gh auth status` shows account but `git push` still fails with 403 | The `gh` account is authenticated for GitHub API access but its token may not have push rights to the specific repo. Diagnose with the per-repo HTTP code check from `github-pr-workflow` Section 3. |
+| **Telegram bot / gateway says "reauthenticate" or returns 404 on private repos, but `gh auth status` looks fine** | The gateway doesn't read `gh`'s keyring. It only reads `GITHUB_TOKEN` from `~/.hermes/.env`. Copy the live gh token into that env var and restart the gateway: see `references/gateway-github-auth.md`. |
 | `gh auth status` shows authenticated but `git push` still fails with 403 with "Invalid username or token" | The credential helper is broken. Push with token embedded directly: `git push https://<user>:$(gh auth token)@github.com/<user>/<repo>.git`. |
 | `remote: Invalid username or token` on every push despite `gh auth status` showing valid account | HTTPS credential helper is broken system-wide. **Fix**: Switch to SSH — generate key, add to GitHub, switch remote to SSH. |
 | `fatal: Authentication failed` | Cached credentials may be stale — run `git credential reject` then re-authenticate |
@@ -942,7 +943,46 @@ For complete repository management (branch protection, secrets, gists, feature e
 
 ---
 
-## Pitfall: Fork Can Be a Write-Only Surface
+### Pitfall: Branch Delete 422 After PR Close Is Benign
+
+`gh api -X DELETE repos/OWNER/REPO/git/refs/heads/BRANCH` returns **422 Unprocessable Entity** when the branch has already been deleted — most commonly because GitHub's "automatically delete head branch" fired on PR close. Treat 422 on a branch delete as success, but **always verify by listing branches afterwards**:
+
+```bash
+gh api repos/$OWNER/$REPO/branches --jq '.[] | "\(.name)"'
+# Confirm only the branches you want remain
+```
+
+Don't retry the DELETE blindly — it'll keep 422'ing. Don't ignore the 422 either, in case it's a real permission error (different error body). The post-delete listing is the source of truth.
+
+### Pre-Merge: Is This PR Even Needed?
+
+Before merging, check whether the PR's changes are already on the base branch via a *newer* merge or direct push. A PR can be open for weeks while someone else lands the same fix differently, or while you push the equivalent change straight to master.
+
+**Diagnostic sequence (2 API calls):**
+
+```bash
+# 1. What does the PR claim to add?
+gh api repos/$OWNER/$REPO/pulls/$PR/files \
+  --jq '.[] | "\(.filename) +\(.additions)/-\(.deletions)"'
+
+# 2. Compare PR's head branch to current base (NOT the base the PR was opened against)
+gh api repos/$OWNER/$REPO/compare/$BASE...$HEAD \
+  --jq '"ahead=\(.ahead_by) behind=\(.behind_by) status=\(.status)"'
+```
+
+**Three decision rules:**
+
+| `behind` | `ahead` | Action |
+|----------|---------|--------|
+| 0 | 0 | Branch identical to base — **close as no-op, delete branch** |
+| > 0 | 0 | PR's commits subsumed by later merges — **close as redundant, delete branch** (cite the subsuming commit SHA in the close comment) |
+| > 0 | > 0 | Genuine work — **rebase + merge** |
+
+The `behind > 0` case is the trap: `gh pr view` shows the PR was based on an old base SHA, but the *current* base has moved on. The PR may still produce a meaningful diff, or it may be entirely redundant — only the file comparison tells you. If the same files are touched and the same lines change, close it. If master has moved *past* what the PR fixes, merging adds nothing.
+
+When closing as redundant, the close comment should name the subsuming commit so reviewers and future-you can audit the decision without re-doing the analysis.
+
+### Pitfall: Fork Can Be a Write-Only Surface
 
 **Symptom:** Your fork exists, push to it succeeds, but `git status` shows your clone of the fork is `4 and 328` commits diverged from upstream. Multiple `chore: auto-commit from watchdog` commits accumulate with empty diffs.
 

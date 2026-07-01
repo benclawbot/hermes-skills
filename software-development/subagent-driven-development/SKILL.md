@@ -230,9 +230,30 @@ git add -A && git commit -m "feat: complete [feature name] implementation"
 - Provide additional context if needed
 - Don't rush them into implementation
 
+### If Subagent Hits the Iteration Cap Mid-Task
+
+Subagents can run out of tool iterations (typically around 50) while still mid-implementation. When this happens, the subagent exits with `status: max_iterations` — **but the files are usually on disk and tests may already be passing**. Always do this recovery pass in the parent session before dispatching a fresh subagent:
+
+```bash
+git status --porcelain     # see what's untracked + modified
+git diff --stat            # see modifications
+pytest <new_test_file> -v  # confirm tests pass
+```
+
+Three outcomes:
+1. **All work committed, tests pass** → mark task complete, move on. The subagent's "failure" was cosmetic.
+2. **Files exist on disk, untracked/modified, tests pass, no commit yet** → run `git add` + `git commit` yourself. This is the most common pattern: the subagent writes files + runs tests successfully but exhausts iterations before reaching the `git commit` step. Finishing the commit yourself is faster and more accurate than dispatching a fresh subagent to redo already-done work.
+3. **Files exist but tests fail or work is incomplete** → dispatch a fresh fix subagent with explicit resume context: "X files exist on disk, tests Y are failing, fix Z and commit."
+
+Don't waste a fresh subagent dispatch redoing work that's already on disk and passing.
+
 ### If Reviewer Finds Issues
 
-- Implementer subagent (or a new one) fixes them
+- Dispatch a fresh fix subagent (don't re-invoke the original implementer — they may also be near their iteration cap, and a fresh context is cleaner). Pass only:
+  - The specific issues to fix (Critical/Important from the review)
+  - Exact file paths and line refs
+  - The required test additions (if any)
+  - The commit message
 - Reviewer reviews again
 - Repeat until approved
 - Don't skip the re-review
@@ -340,11 +361,49 @@ context="Existing files: [list], what's done: [what timeout report said], remain
 - `wc -l **/*.swift` for line counts
 - `read_file` all key files directly from the local clone
 
-**Never spend a tool call retrying browser_navigate on a GitHub repo that timed out once** — use `gh clone` or `wget` instead.
+**Never spend a tool call retrying browser_navigate to a GitHub repo that timed out once** — use `gh clone` or `wget` instead.
 - Parallel: code review / bug audit across multiple distinct directories or modules
 - Sequential: tasks that depend on each other's output (implementation plans)
 
-**Why fresh subagent per task:**
+## Pitfall: Atomic-Write Files Need Both flock AND threading.Lock
+
+Linux `flock(2)` locks the **open file description** (a per-process kernel data structure), not the inode. Two `open()` calls in the *same process* get distinct open file descriptions, so `flock(fd1)` and `flock(fd2)` on the same file do NOT serialize each other — both threads can hold LOCK_EX simultaneously. Cross-process coordination works fine; intra-process thread coordination needs a separate `threading.Lock`.
+
+When writing any atomic file-write helper (JSON, scratchpad, state file) that may be invoked from multiple threads in the same process:
+
+```python
+import fcntl
+import threading
+
+# Per-path thread lock registry (intra-process)
+_path_locks: dict[str, threading.Lock] = {}
+_path_locks_guard = threading.Lock()
+
+def _get_path_lock(path: str) -> threading.Lock:
+    with _path_locks_guard:
+        lock = _path_locks.get(path)
+        if lock is None:
+            lock = threading.Lock()
+            _path_locks[path] = lock
+        return lock
+
+def atomic_json_write(path: str, data: dict) -> None:
+    lock = _get_path_lock(path)
+    with lock:  # intra-process serialization
+        with open(path, "r+") as fp:
+            fcntl.flock(fp.fileno(), fcntl.LOCK_EX)  # cross-process serialization
+            try:
+                # read-modify-write
+                ...
+            finally:
+                fcntl.flock(fp.fileno(), fcntl.LOCK_UN)
+```
+
+**How to catch this in code review:** if the helper is called concurrently from multiple threads (e.g. parallel `delegate_task` workers writing to a shared scratchpad), check whether `flock` alone preserves all writes. A test that spawns N threads each writing to a distinct key, then reads back N entries, is the cleanest detector — flock alone loses N-1 entries, the combo preserves all of them.
+
+**Source:** agent-swarm scratchpad primitive review (Task 4 of the xenobot substrate plan, hermes-agent). Initial impl used `fcntl.flock` only; concurrent-write test caught the lost-update race; fix added `threading.Lock` registry alongside.
+
+## Pitfall: Check for Existing Ports Before Rewriting from Scratch
 - Prevents context pollution from accumulated state
 - Each subagent gets clean, focused context
 - No confusion from prior tasks' code or reasoning
