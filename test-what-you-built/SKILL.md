@@ -19,7 +19,7 @@ Load this skill the moment the user pushes back on a completion claim. Signals:
 
 Do NOT use this skill for:
 - Routine yes/no confirmation of low-stakes work
-- Architectural / design discussion (use `plan` or `writing-plans` instead)
+- Architectural / design discussion (use `plan` or `plan-and-execute-workflow` instead)
 - First-time code review (use `requesting-code-review`)
 
 ## The "verify-before-build" gate
@@ -174,6 +174,12 @@ Not verified:
 - **Hiding behind "out of scope"** — if you touched it, you own it.
 - **Reading the diff with a search tool and reporting "no issues"** — search is not adversarial review. Read it.
 - **Stopping at "the one path I tested works"** — broad verification means exercising every code path the change touched, not the path you hand-picked. If a flag/button/mode exists in the code, it gets its own run. If a JSON column gets decoded, test what happens with bad JSON. If a CLI has three modes, all three get exercised end-to-end. "It works" with one example is a sample, not coverage. (2026-06-15 worked example: bot.mjs gained a `--dry-run` test, but the user pushed back with "verify by default" — the broader pass caught (a) `--approve-all` required TELEGRAM_BOT_TOKEN even though it doesn't use it, (b) the bot was instantiated on `--approve-all` and spammed `EFATAL` polling errors, (c) `proposal.steps.map()` blew up because `node:sqlite` returns raw TEXT, not parsed JSON, (d) `--approve-all` didn't exit after one pass. All four bugs were invisible from the single-path "dry-run prints the right text" pass.)
+
+- **"The smoke test passed, so I'm done"** is the cheapest false-positive in the bag. Smoke tests check the **happy path** of the **headline behavior**. They do not check: (a) whether every file referenced by the spec actually exists on disk, (b) whether the rendered visual matches the spec at the *specific pixel locations the math dictates*, (c) whether upstream/downsstream consumers can find what they need. **The 2026-07-03 Ocean wallpaper case**: smoke test reported "12/12 PASS, sky brighter than deep, waterline at 42%, all 3 presets render." All true. But a separate per-spec-checklist pass caught (1) `WaterlineModel.kt` was missing despite spec §6 requiring it as the "single source of truth," (2) `ocean_preview.png` was missing despite being referenced by `res/xml/ocean_wallpaper.xml`, (3) all 5 density variants of launcher icons were missing despite manifest references, (4) the `gradle-wrapper.jar` was absent so the project literally could not build. The user explicitly called this out: *"Are you done? Why did you stop?"* The smoke test was passing because it only tested the runtime — not the deliverable as a whole. **The fix**: at the end of every build pass, run the **spec-deliverable grep** — `git grep -nE "<every resource path the manifest references>|<every class name the spec names>"`. If the spec says it must exist, the grep must find it.
+
+- **Two implementations, both wrong the same way, both "look right"** — the most insidious visual-rendering failure. **2026-07-03 Ocean wallpaper case**: the GLSL shader had `if (uv.y < line)` for "above water." With the spec's convention "uv.y=1 at top," that puts "above water" in the lower half of the screen — backwards. The Python port happened to render correctly because its own uv.y was flipped too — two bugs cancelling, both producing "sky on top" output. A smoke test that checked "top region is brighter than bottom" passed. **The trap is that visual output looks right, so the convention question is never asked.** The fix is **anchor verification at the *expected* coordinate, derived from the formula**: if the spec says sun is at uv (0.7, 0.78), don't sample "the bright spot I see" — compute the exact image row/column from the formula and sample THAT pixel. The bug only surfaces when you ask "is the bright spot where the math says it should be?" **More broadly**: when porting a shader/renderer to a CPU reference, treat the two as independent implementations and **test cross-consistency on a shared ground-truth fixture** (e.g., a known-time frame with known pixel expectations), not on "does it look right." And: **always sample at least one coordinate where the formula predicts a non-trivial value, not at coordinates that are visually obvious** (like "the bright spot" or "the waterline row"). Sample the sun's exact uv coordinate. Sample a deep-water pixel. Sample at uv.y exactly equal to the waterline.
+
+- **Derive verification coordinates from the formula, not from the image.** When you reverse-engineer "where in the image is the sun" from the rendered output, you reproduce the bug — you find the bright spot, sample it, declare success. When you compute "where SHOULD the sun be" from the formula and sample THAT pixel, you catch the inversion. This applies to any GPU/CPU-port verification: the verifier's sampling strategy should be **math-derived, not image-derived**. (Same lesson as the smoke-test pitfall above: pick the verification points *before* you look at the output.)
 - **Performing a confession booth** - listing problems is not the same as fixing them. Item 5 exists.
 - **Paraphrasing the user's trigger phrases in your skill description** - description matching silently fails. Mirror user words exactly.
 - **Skipping "verified the skill loads"** when the artifact is a skill - `skills_list` is the only proof the loader sees it. File on disk is not the same as file discoverable.
@@ -234,7 +240,7 @@ Filter the outside-project result by what's a **live** reference
 (a `cd` command, a `workdir`, a "see also" pointer) vs what's
 **historical** (a `git log` quote, a backup path, a "learned in
 session X" prose reference). Live → update. Historical → leave
-alone. Detailed table in `codebase-porting/SKILL.md` →
+alone. Detailed table in `build-spec-workflow/SKILL.md` →
 "Project-Rename Touchpoint Sweep" → "The live path vs historical
 record test."
 
@@ -247,7 +253,7 @@ skill-doc path references. The canary was
 `tests/test_branch_full.py:274` `subprocess.run(..., cwd="/home/thomas/self-recursive-improvement", ...)` — it crashed
 on the first run after the rename, which forced the rest of the
 sweep. The cron jobs would have silently run with stale `workdir`
-otherwise. (See `codebase-porting/SKILL.md` for the full sweep
+otherwise. (See `build-spec-workflow/SKILL.md` for the full sweep
 recipe.)
 
 **For wiring dead code that's masquerading as a working cron

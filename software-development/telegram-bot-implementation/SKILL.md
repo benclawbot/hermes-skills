@@ -371,7 +371,7 @@ text.
 - `self-improvement-loop` → "Inline-keyboard decision flow 2026-06-08" —
   the `callback_data` schema, polling offset persistence, and Modify
   semantics for the SRI loop's approval surface
-- `codebase-porting` — implementing an external repo/spec (the Omni-Memory
+- `build-spec-workflow` — implementing an external repo/spec (the Omni-Memory
   hub was ported to the Macbook Air following this skill)
 - `test-what-you-built` → "Multi-surface audit" — when changing the env
   var or path conventions here, audit the cron jobs, scripts, and other

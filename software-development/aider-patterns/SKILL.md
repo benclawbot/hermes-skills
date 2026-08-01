@@ -544,7 +544,7 @@ the actual source. Full analysis reports:
 ## Related skills
 
 - `oss-pattern-mining` — find patterns in arbitrary OSS repos
-- `codebase-porting` — implement patterns into your codebase
-- `writing-plans` — break a chosen pattern into tasks
-- `spec-driven-build` — LLM-driven iterative spec loop
+- `build-spec-workflow` — implement patterns into your codebase (codebase-porting is now a subsection)
+- `plan-and-execute-workflow` — break a chosen pattern into tasks (writing-plans is now a subsection)
+- `build-spec-workflow` — LLM-driven iterative spec loop (spec-driven-build is now a subsection)
 - `test-what-you-built` — verify the patterns actually work in your context

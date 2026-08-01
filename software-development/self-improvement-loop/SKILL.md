@@ -1,7 +1,7 @@
 ---
 name: self-improvement-loop
-description: "Design and operate a closed-loop self-improvement system for an AI agent — propose → judge → DECIDE (Telegram inline buttons) → apply → grade, with override-rate + help-ratio feedback signals, an avoid-list, judge calibration checkpoint, worked SQLite schema, and the cron-budget / patch-durability / column-drift / test-isolation / shared-state-per-process-path pitfalls learned the hard way. The env-var-overridable path pattern keeps test suites from polluting prod state across every writable path (DB, branch dirs, backup/marker dirs). Use when the user wants the agent to improve its own skills/memory based on session transcripts, says 'recursive self-improvement', 'improve yourself from sessions', or asks for a feedback loop where the agent proposes changes to its own config."
-version: 1.5.0
+description: "The umbrella skill for everything that happens around a code change: review, simplify, decide what's worth learning, and avoid promoting lessons that become recurring bugs. Covers the 5-stage self-improvement loop (propose → judge → DECIDE → apply → grade), parallel 3-agent simplify-cleanup, the 8-step pre-commit review pipeline (security scan → baseline → independent reviewer → auto-fix), and the policy-vs-data gate that decides whether a 'lesson' should be auto-promoted into every future prompt. Use when the user wants the agent to improve its own skills/memory, says 'recursive self-improvement' / 'simplify' / 'review before commit' / 'auto-promote the lesson', or asks for a feedback loop where the agent proposes changes to its own config."
+version: 2.0.0
 author: Hermes Agent (Thomas)
 license: MIT
 metadata:
@@ -30,7 +30,7 @@ Do NOT use this skill for:
 - General agent evaluation (use `harness-framework`)
 - Single-skill quality improvement (use `skill-evolution`)
 - Memory-only consolidation (use `memory-dreams`)
-- Adapting a codebase to a spec (use `codebase-porting`)
+- Adapting a codebase to a spec (use `build-spec-workflow`)
 
 ## The 5 stages (added DECIDE — inline-keyboard decision — 2026-06-08)
 
@@ -935,6 +935,81 @@ boundary, not outside it.
   set, which is exactly what Phase 5's benchmark harness will
   add separately.
 
+## Companion Skills (absorbed)
+
+Three former sibling skills now live as labeled subsections of this umbrella, because they all share the same class: **what to do with changes — review them, simplify them, decide what to learn from them, and what to inject into every future run.** Pairwise distinct trigger phrases are the wrong bar; "would a maintainer name this one skill with N subsections" is the right one.
+
+### Subsection: `simplify-code` (formerly standalone)
+
+> Parallel 3-agent cleanup of recent code changes. Use when the user says "simplify", "review my changes", "clean up my changes", or `/simplify`. Three narrow reviewers (reuse / quality / efficiency) beat one broad reviewer.
+
+**Phase 1 — Identify the changes:** `git diff` → `git diff HEAD` → `git diff HEAD~1` → `git diff main...HEAD` → `git diff -- src/foo.py`. Warn if diff > 2000 lines (offer to scope down).
+
+**Phase 2 — Launch 3 reviewers in parallel** via `delegate_task` batch mode. Every reviewer gets the WHOLE diff and the absolute repo path. Reviewers search the codebase; they don't guess. Findings must include `file:line → problem → fix` evidence.
+
+- **Reviewer 1 — Code Reuse:** duplicates of existing utilities, hand-rolled logic that an existing helper does.
+- **Reviewer 2 — Code Quality:** redundant state, parameter sprawl, copy-paste-with-variation, leaky abstractions, stringly-typed code (check canonical registries).
+- **Reviewer 3 — Efficiency:** unnecessary work, missed concurrency, hot-path bloat, TOCTOU, memory leaks, overly broad reads.
+
+**Phase 3 — Aggregate and apply.** Merge + dedupe. Default resolution order: correctness > user's stated focus > readability/reuse > micro-perf. Apply via `patch` / `write_file`. Verify with targeted tests + linter. Don't rewrite the whole module — scope edits to what the diff touched.
+
+**Focus modifiers** the user may add: `focus on reuse|quality|efficiency` (drop the others). `dry run` / `just report` (present findings, apply nothing, ask first).
+
+**Trap to avoid:** Don't fan out wider than 3 — cost/conflict grows superlinearly. Don't split the diff across reviewers — cross-file duplication hides in the gaps.
+
+### Subsection: `requesting-code-review` (formerly standalone)
+
+> Pre-commit review: security scan, quality gates, auto-fix. Use when the user says "commit", "push", "ship", "done", "verify", "review before merge", or after any coding task with 2+ file edits.
+
+**Core principle:** No agent should verify its own work. Fresh context finds what you miss. (Same as the SRI loop's "judge ≠ proposer" rule — independent reviewers beat shared context.)
+
+**8-step pipeline:**
+1. `git diff --cached` (fallback: `git diff`, then `git diff HEAD~1 HEAD`; split if >15k chars)
+2. **Static security scan** on added lines: hardcoded secrets, `shell=True`, `eval/exec`, `pickle.loads`, SQL string-format. Any match → fed into step 5.
+3. **Baseline tests + linting**: stash → run → unstash to get baseline failure count. Only NEW failures block the commit.
+4. **Self-review checklist**: secrets, input validation, parameterized SQL, path validation, error handling, no debug prints, no commented code, tests for new code.
+5. **Independent reviewer subagent** via `delegate_task`. FAIL-CLOSED: security_concerns non-empty → passed:false; logic_errors non-empty → passed:false; unparseable → passed:false. JSON verdict only.
+6. **Evaluate**: combine steps 2+3+5. All passed → commit. Any failed → step 7.
+7. **Auto-fix loop** (max 2 cycles): spawn a third agent context that fixes ONLY the listed issues. After fix → re-run steps 1-6.
+8. **Commit with `[verified]` prefix** indicating independent review approval.
+
+**Common flag patterns:** See `references/code-review-common-findings.md` for the catalog (SQL injection, XSS, unsafe subprocess).
+
+**This skill vs `test-what-you-built`:** This is the *proactive* pre-commit gate. `test-what-you-built` is *reactive* — runs when the user pushes back on a claim. Both apply the same adversarial lens.
+
+### Subsection: `policy-vs-data-decisions` (formerly standalone)
+
+> Distinguish "policy" (rules injected into every future prompt forever) from "data" (facts scoped to a session, run, or artifact). When in doubt, treat as policy.
+
+**The test:** "Does this thing get injected into every future prompt for some mode/task/user? If yes, it's policy."
+
+| Type | Example | Auto-promote? |
+|---|---|---|
+| Fact about a specific artifact | "this file is at path X" | Yes |
+| Scoring rule | "correctness weighted 35%" | **No** — humans decide weight |
+| Heuristic for an unseen task | "for new task X, do Y" | **No** — bad heuristic = recurring bias |
+| Reflection on a single run | "this run took 12 turns" | Yes (or don't, it ages out) |
+| "When user says X, do Y" | ANY of these | **No** — Y becomes a default forever |
+| Correction of a one-off mistake | "the typo was 'recieve'" | Yes if logged, no if it generalizes |
+
+**Default rule for the lessons module:** human-gated (`auto_promote: false`). Do not flip the toggle without also proposing:
+1. **Quality gate** (e.g. confidence ≥ 0.8)
+2. **TTL** (e.g. 7 days, then re-validate)
+3. **Soft cap** (e.g. 5 active lessons per mode)
+4. **Audit trail** (log every promote/reject with reason, run ID, confidence)
+
+**Refusal pattern:** When asked for unfiltered auto-promotion, surface the tradeoff: *"Auto-promote with no gate means a bad lesson becomes a recurring bug. The spec put the human there on purpose. I can flip the toggle (30 sec) or build a gated version (quality ≥ 0.8 + TTL 7d + soft cap 5/mode + audit) — pick which."* Both options real, point is to surface the choice.
+
+**"Remove the human in the loop" alternatives** (cheaper, still safe):
+- Confidence-threshold auto-promote (promote only above 0.8, borderline to human)
+- Time-bounded auto-pilot (24h auto-promote, then require re-validation)
+- Shadow mode (apply but log diff vs old default for human review)
+- Staged rollout (auto-promote only on tasks matching a trusted-pattern fingerprint)
+
+**Worked case study:** See `references/policy-vs-data-sri-case-study.md` — the self-recursive-improvement loop (2026-06-07) shipped the *finished* version when the *minimum viable* version would have produced real data to justify the structure.
+
+**Memory-vs-skill placement:** User-memory facts go in `~/.hermes/memory.md`. Skill-update triggers go in the relevant skill's SKILL.md or references/. Don't re-encode memory in skills.
+
 ## When NOT to add a stage
 
 Resist the urge to add a stage for every failure mode. The 4 stages
@@ -1025,7 +1100,7 @@ After any change to the loop, verify:
 - `skill-evolution` — mine Hermes sessions for lessons to feed this loop
 - `memory-dreams` — consolidate memory in 4 phases; complementary
   signal source for the lessons table
-- `codebase-porting` — when the loop generates a "implement this spec"
+- `build-spec-workflow` — when the loop generates a "implement this spec"
   proposal, this is the skill to load
 - `policy-vs-data-decisions` — rubric updates ARE policy. TTL +
   quality gate + audit trail required.

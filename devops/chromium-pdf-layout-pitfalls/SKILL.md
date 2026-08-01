@@ -1,7 +1,7 @@
 ---
 name: chromium-pdf-layout-pitfalls
-version: "1.3.0"
-description: "Verified chromium --print-to-pdf layout bugs and fixes for the research-briefing-pdf / last30days pipeline. Use when charts render as thin bars, page bottoms are unexpectedly blank, or vision reports a clean PDF as broken."
+version: "1.4.0"
+description: "Verified chromium headless layout bugs and fixes - PDF briefs with thin charts or orphan pages, plus viewport-width --screenshot verification for static pages and SPAs at mobile / tablet / desktop."
 category: devops
 ---
 
@@ -133,3 +133,69 @@ pdftoppm -r 110 output.pdf /tmp/preview -png  # render for vision check
 ```
 
 If audit fails, look at the page that flagged, not the whole PDF.
+
+## Bonus: headless `--screenshot` for viewport-width responsive verification
+
+Same chromium binary, different mode. Use when verifying a static page or SPA renders correctly at mobile/tablet/desktop widths. Verified 2026-07-13 on Linux + Chromium 142 snap at `/snap/bin/chromium`.
+
+Full recipes: see `references/headless-screenshot-verification.md` (4-viewport capture loop, sandbox output gotchas, screenshotting every tab of a pure-state SPA, and the vision_analyze reliability notes).
+
+### The single most common responsive bug: inline `grid-template-columns` overrides media queries
+
+A page can have 18 beautifully-tuned `@media` rules and still break on mobile because a template-literal-rendered div has `<div class="grid" style="grid-template-columns:1fr 1fr">` — inline styles beat class rules. The CSS audit looks perfect. The phone is broken. **Source-audit alone is insufficient; viewport screenshots are mandatory.**
+
+**Fix pattern:** extract the hardcoded grid to a class, give the class a media query.
+
+```css
+.reports-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:700px){.reports-grid{grid-template-columns:1fr!important;gap:14px}}
+```
+
+### The 4-viewport screenshot recipe
+
+```bash
+# Each capture needs a unique --user-data-dir to avoid lock contention
+# Use --virtual-time-budget=4000 so JS SPAs have time to render
+# Window height = target + slack (1500px) so the full page is captured
+
+for spec in "360x800" "390x844" "414x896" "768x1024"; do
+  IFS=x read w h <<< "$spec"
+  chromium --headless --disable-gpu --no-sandbox --hide-scrollbars \
+    --user-data-dir=/tmp/cr-prof-$spec \
+    --window-size=$w,$((h+1500)) --virtual-time-budget=4000 \
+    --screenshot=${spec}.png "http://localhost:8765/index.html" 2>/dev/null
+done
+```
+
+### Sandbox gotchas
+
+- **Output path:** `--screenshot=path.png` honors CWD, not the literal path in some confined environments. If the file is reported "written" but `ls` can't find it, write to a non-`/tmp` path (e.g. `~/shots/`) or `cd` into the target dir before invoking.
+- **Unique `--user-data-dir` per invocation** — concurrent or sequential runs without it can collide. Pattern: `/tmp/cr-prof-<unique-id>`.
+- **Single-page-app screenshots need `--virtual-time-budget=4000+`** — chromium screenshots before JS render completes otherwise. The 130KB JS bundle in the 2026-07-13 case required 4 seconds.
+
+### Screenshotting every tab of a JS SPA without DevTools
+
+Pure-state SPAs (no hash routing) can't be deep-linked. Cheap workaround: copy the source, swap the initial-state declaration, render each variant.
+
+```python
+import shutil, os
+src = 'index.html'
+work = '/tmp/work'
+os.makedirs(work, exist_ok=True)
+for tab in ['home', 'students', 'reports', 'settings']:
+    dst = os.path.join(work, f'{tab}.html')
+    shutil.copy(src, dst)
+    with open(dst) as f: html = f.read()
+    # Only patch the FIRST occurrence (the declaration site)
+    html = html.replace("let currentPage='home'", f"let currentPage='{tab}'", 1)
+    with open(dst, 'w') as f: f.write(html)
+    # then run chromium --screenshot="file:///tmp/work/{tab}.html"
+```
+
+### Verify across every tab, not just home
+
+If a SPA has a sidebar/nav with multiple tabs (`.page` elements or route views), the home page is usually the simplest layout — bugs hide in the more complex tabs. The 2026-07-13 `cahier-de-dictees` audit found zero mobile issues on home/students/dictations/entry/settings, and a clear overflow on **reports** (a 2-column `.grid` that ignored media queries). Always screenshot ≥1 non-home tab.
+
+### Vision feedback loop is noisy
+
+`vision_analyze` on screenshot PNGs sometimes returns `{"analysis": "User Safety: safe"}` with no actual description, with no error. Retry once or two before changing strategy; don't conclude the page is broken based on empty vision output alone. If 2 retries are empty, trust the source audit + `grep` for known bad patterns (inline `grid-template-columns`, `width:max-content` without overflow handling) instead of looping on vision.

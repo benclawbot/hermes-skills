@@ -6,7 +6,7 @@ author: Thomas
 metadata:
   hermes:
     tags: [communication, planning, discovery, reply-style]
-    related_skills: [writing-plans]
+    related_skills: [plan-and-execute-workflow]
 ---
 
 # One Question at a Time Discovery
@@ -113,8 +113,8 @@ Example:
 - **using `clarify` tool `choices=[{value:'...'}]` dicts** — schema is `List[str]`, model emits dicts, gateway's `str(c)` renders `"{'value': '...'}"` literals in the message body. Always pass plain strings. See `tool-call-harness-repair/references/mode-19-list-of-dicts.md`.
 - **trusting `clarify` inline-keyboard buttons in Telegram** — the gateway often drops `reply_markup` and the question arrives as plain text. Don't assume button-tap capture works; the user may type a free-form answer.
 
-## Spec handoff protocol (post-`writing-plans`)
-
+## Spec handoff protocol (post-`plan-and-execute-workflow`)
+When you write an implementation plan with `plan-and-execute-workflow` (formerly `writing-plans`) and it ends with an "Open Questions" section,
 When you write an implementation plan with `writing-plans` and it ends with an "Open Questions" section, the **spec handoff is the discovery flow**, not a separate phase. The user reading the plan file does NOT mean they've decided — they want to triage each question in turn.
 
 **Wrong** (the bug, observed 2026-06-26):

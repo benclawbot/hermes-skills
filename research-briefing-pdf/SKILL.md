@@ -1,7 +1,7 @@
 ---
 name: research-briefing-pdf
 description: "Produce a polished PDF research briefing from public sources (SEC filings, press releases, public web pages) — with charts, tables, risk heatmaps, and a clear call. Loads when Thomas says 'make me a full briefing', 'give me a PDF report on X', 'research Y and produce a document', or hands over a URL/PDF and asks for written analysis. The default design is the 'soft-modern data journal' aesthetic (cream paper, terracotta accent, serif display, mono numerics) — re-skinnable by swapping the :root CSS tokens. Uses single-flow pagination (one continuous HTML document, browser paginates, no audit layer required). Includes layout-density pitfalls, the snap-Chromium-writes lie, the file://+spaces pitfall, the relative-img-src pitfall, the pdftotext/pdfinfo/pdftoppm verification trio, the chromium grid-1fr collapse fix (use flexbox), and the vision-analyze layout-hallucination reality check."
-version: 2.1.0
+version: 2.3.0
 author: Hermes Agent (Thomas)
 license: MIT
 metadata:
@@ -243,6 +243,38 @@ boxes) so the browser paginates correctly on the first pass.
   section of a logical unit, and let CSS pagination flow the
   rest.
 
+- **(2026-07-10) Orphan section header on dense sections.**
+  `break-after: avoid` on h2 alone is NOT enough when section
+  content density forces a page break inside the section.
+  Chromium then sticks the h2 + first paragraph at the bottom of
+  page N and pushes the rest of the section to page N+1 — a
+  classic "title-only page-bottom" defect. Verified on the
+  Cahier de Dictées briefing (9-page output, §07 GTM header
+  at bottom of page 6 with content starting page 7).
+  **Fix hierarchy:**
+  1. Pair `break-after: avoid` on h2 with `break-before: avoid`
+     on the h2's first child — keeps the heading glued to its
+     lede paragraph regardless of how the rest of the page
+     breaks.
+  2. If section content + folio won't fit one page, add
+     `section.spread { break-before: page }` so each major
+     section starts on its own page. Accept the page-count
+     increase.
+  3. If neither fits, compact the section (shorter list, smaller
+     margins, fewer items) until content + folio fit one page.
+  Verify with: `pdftotext -layout briefing.pdf - | awk -v
+  RS="\f" 'NR>1 {print "P"NR": "substr($0,1,80)}'` — every page
+  should have section content, not just an end-strip or folio.
+
+- **(2026-07-10) Heading+lede glue is bidirectional.**
+  `h2 { break-after: avoid }` keeps the heading on the same
+  page as the following paragraph — but only if the paragraph
+  *immediately* follows. Adding `h* + p { break-before: avoid }`
+  is the belt-and-suspenders pattern that prevents the
+  reverse orphan (paragraph stranded above its heading on the
+  next page). Cheap, no downside, recommended for every
+  briefing.
+
 - **Long tables / lists at end of a section leave the next page
   30–40% empty.** **Fix:** (1) reduce vertical padding on
   callouts and table rows from 5pt to 3pt; (2) move callout
@@ -327,15 +359,99 @@ boxes) so the browser paginates correctly on the first pass.
 - **Chromium `--print-to-pdf` does NOT respect CSS `max-width: 100%`
   on images for PDF output.** Charts wider than the page content
   width will overflow the right edge of the PDF, even if the
-  HTML says `width:100%; max-width:100%;`. **Fix:** regenerate
-  the chart PNG at a width that fits the page natively
-  (~6.5" for A4 with 18mm margins = 909px at 110dpi). Verify
-  with `PIL.Image.open().size[0] < page_width_px` before rendering.
+  HTML says `width:100%; max-width:100%;`. **Fix:** regenerate the
+  chart PNG at a width that fits the page natively (~6.5" for A4
+  with 18mm margins = 909px at 110dpi). Verify with
+  `PIL.Image.open().size[0] < page_width_px` before rendering.
   (Verified 2026-06-10 with funding timeline chart overflowing.)
   **Hard rule for every chart PNG before PDF render:** width MUST
   be ≤ 870px (allowing 39px slack for `bbox_inches='tight'` crop).
   Add this assertion to `make_charts.py` as the final pre-step —
   fail loud, don't ship overflow.
+
+- **(2026-07-10) Bar value labels at `v+offset` AND priority
+  badges at negative-x collide with the y-tick labels.** Pattern
+  was `ax.text(aud + 8, ..., ha='left')` for the value (right of
+  the bar) and `ax.text(-25, ..., ha='right')` for the badge
+  (left of the bar, in the negative-x gutter). The badge was in
+  the same x-band as the y-tick text. **Fix:** move the badge
+  **inside** the bar at the left edge — `ax.text(2, ..., ha='left',
+  color=PAPER, weight='bold')` — paper-colored text reads on the
+  colored bar and never collides with anything. Also tighten
+  `set_xlim` to start at 0 (no negative-x gutter) and add a paper-
+  colored bbox to the right-side value label so it reads cleanly
+  past the bar end.
+
+- **(2026-07-10) Annotation labels collide with legends sharing
+  the same corner.** `ax.legend(loc='lower left')` puts a 4-item
+  size legend in the bottom-left. A nearby bubble at (1,1) with
+  label-offset `(-14, +14, 'right')` puts the label *right* of
+  the bubble — directly over the legend's "Fort" item. **Fix:**
+  don't rely on `(-dx, +dy)` for points in the lower-left
+  quadrant. Either (a) push the label *up-right* with
+  `(+14, +18, 'left')` so it sits above the legend, or (b)
+  shrink the legend (`labelspacing`, `borderpad`) and move it
+  with `bbox_to_anchor=(0.02, 0.02)` to give the label space.
+  Diagnose before guessing: vision missed this collision on
+  chart 6; only a pixel-band scan caught it.
+
+- **(2026-07-10) Bottom-of-axis callouts (milestone text, source
+  lines, lede footnotes) sit flush against x-tick labels.**
+  `ax.text(day, -0.6, txt, va='top')` puts the milestone box at
+  y=-0.6 with no background — the x-axis tick labels at y=0
+  visually crash into it. **Fix:** wrap callouts in a paper-color
+  bbox (`bbox=dict(boxstyle='round,pad=0.25', fc=PAPER,
+  ec='INK_FAINT', lw=0.4, alpha=0.9)`) and increase y-limit
+  headroom (`set_ylim(-1.6, ...)` instead of `-1.2`). The bbox
+  both visually separates and lets the text slightly overlap the
+  tick band without becoming unreadable.
+
+- **(2026-07-10) In-bar text on a categorical barh stacks on the
+  FIRST row.** `ax.barh(label, ...)` builds a categorical y-axis.
+  Calling `ax.text(cx, 0, txt)` or `ax.text(cx, idx, txt)` to label
+  each bar puts the text at the *numeric* y-coordinate 0/idx, which
+  matplotlib resolves to the FIRST category — so all three in-bar
+  labels collapse onto Phase 0. **Fix:** pass the category NAME as
+  the y coordinate: `ax.text(cx, label, ...)`. For sub-labels
+  *below* the bar, use `ax.annotate(sub, xy=(cx, label),
+  xytext=(0, -22), textcoords='offset points', ...)` — this also
+  decouples the sub-label from the categorical y-resolution. Full
+  pattern in `references/matplotlib-label-collision.md` (Fix 7).
+  Symptom: vision audit says only the first bar has its in-bar
+  text and the others are empty.
+
+- **(2026-07-10) Paper-color bbox backplates used to "fix" label
+  overlap instead of actually separating label positions.** When
+  two `ax.annotate()` labels collide, the instinct is to add
+  `bbox=dict(boxstyle='round,pad=0.25', fc=PAPER, ec='none',
+  alpha=0.85)` to each and call it fixed. **The bbox only paints a
+  paper-colored box over the colliding text — the underlying
+  geometry is still overlapping.** Three rounds of this pattern
+  produced three visually-clean charts that were still
+  layout-colliding under the bboxes; the user flagged the same
+  issue repeatedly. **Fix hierarchy:** (1) actually move labels
+  apart (Fix 1/2/6/7 of `references/matplotlib-label-collision.md`,
+  or numbered-marker side-legend past 12 labels); (2) THEN add
+  bbox backplates for legibility when labels are still close —
+  never as the primary fix. **Verification:** read the source
+  `text()` and `(dx, dy, ha)` tuples, not the rendered PNG —
+  pixel-band scan can catch *some* bbox-masked overlap but the
+  source-level check is faster. Treat any chart that needed bboxes
+  to "look clean" as a code review item, not a finished chart.
+
+- **Pre-size the figure, don't just post-verify.** A naive
+  `(9, 4.2)` inch figure at `dpi=150` produces a 1350×630 PNG
+  (~7" wide after `bbox_inches='tight'` crops a bit), which trips
+  the 870px limit. The skill's `verify_width` assertion catches
+  it post-savefig but wastes a render cycle. **Fix at the source:**
+  use `(7, 3.6-4.2)` inches at `dpi=120` for A4 single-column
+  charts, `(9, 4.2)` at `dpi=120` only for full-spread hero
+  charts that can span both columns. The formula that survives
+  `bbox_inches='tight'` crop reliably: `png_width_px ≈
+  figsize_inches × dpi × 1.05`. Keep that ≤ 870. Verified
+  2026-07-10 on the Cahier de Dictées market brief — six charts
+  all landed at 813-847px wide on first attempt after applying
+  this sizing rule.
 
 - **Source line collides with x-axis tick labels.**
   `fig.text(0.01, 0.005, ...)` with default `bbox_inches='tight'`
@@ -353,6 +469,23 @@ boxes) so the browser paginates correctly on the first pass.
   note in the source attribution (`fig.text(...)`) or as a
   `fig.text` outside the axes entirely. Or use a side legend
   table.
+
+- **(2026-07-10) Scatter/bubble chart `annotate()` labels stack
+  on top of each other when multiple points share a y-band.**
+  The textbook pattern `ax.annotate(name, xy, xytext=(0, 14),
+  ha='center')` puts every label *above* its point — when 3+ bubbles
+  are at similar y (e.g. three competitors at y≈0.3 with x spread
+  0/1/2), the labels overlap. **Fix:** per-name offset dict
+  `{(dx, dy, ha)}` so labels radiate in 8 directions, plus
+  paper-colored bbox for visual separation. Companion fixes:
+  `set_ylim(..., top + 0.25)` for dy=+24 headroom, `set_xlim(-0.3, ...)`
+  for dx=-12 left-edge room, increase `figsize` height (e.g.
+  `(7, 4.6)` from `(7, 3.8)`). Escalate to numbered markers +
+  side legend past ~12 labels. Full pattern and verification
+  recipe in `references/matplotlib-label-collision.md` (Fix 6).
+  Verified on Cahier de Dictées `02_positioning.png` — 8 distinct
+  label y-bands (168, 183, 203, 297, 310, 361, 375, 448 px),
+  zero collisions.
 
 ### Design-specific pitfalls (soft-modern — verified 2026-06-09)
 
@@ -401,6 +534,52 @@ boxes) so the browser paginates correctly on the first pass.
   `pdftotext -layout` (real text flow) instead of vision for layout
   truth. (Pixel-audit script retired 2026-06-27 — single-flow
   pagination made it unnecessary.)
+
+- **(2026-07-10) For matplotlib chart label collisions specifically,
+  vision is even worse than for page layout.** Across 4 vision calls
+  on chart 6 of the Cahier de Dictées brief, vision returned
+  "User Safety: safe" (no description) twice, gave a generic
+  thumbnail description twice, and never named the actual collision
+  (the "Apps.éducation" label overlapping the "Fort" legend item).
+  **Fix:** use a PIL pixel-band scan to find real text collisions
+  before trusting vision. The scan finds text rows (consecutive
+  y-rows with dark pixels) and flags any two adjacent bands whose
+  vertical gap is < 4px AND whose x-ranges overlap by > 30px:
+
+  ```python
+  from PIL import Image
+  import numpy as np
+  img = np.array(Image.open('chart.png').convert('RGB'))
+  gray = img.mean(axis=2)
+  dark = (gray < 80).sum(axis=1)
+  # Find text bands
+  bands = []
+  in_run = False; s = 0
+  for i, v in enumerate(dark):
+      if v > 5 and not in_run: in_run = True; s = i
+      elif v <= 5 and in_run:
+          in_run = False
+          if i - s >= 2: bands.append((s, i))
+  # Detect collisions
+  for idx, (s, e) in enumerate(bands):
+      cols = (gray[s:e] < 80).any(axis=0)
+      nz = np.where(cols)[0]
+      if len(nz) == 0: continue
+      if idx + 1 < len(bands):
+          s2, e2 = bands[idx+1]
+          cols2 = (gray[s2:e2] < 80).any(axis=0)
+          nz2 = np.where(cols2)[0]
+          gap = s2 - e
+          if gap < 4 and (max(0, min(nz[-1], nz2[-1]) - max(nz[0], nz2[0])) > 30):
+              print(f"COLLISION: y={s}-{e} vs y={s2}-{e2}")
+  ```
+
+  False-positive rate: some "collisions" are multi-line label
+  sub-bands (e.g. "AUDIENCE\nESTIMÉE (K)" rendered on two lines).
+  Treat any positive as a *candidate* — crop the region and
+  vision-analyze the crop to confirm. This scan caught the
+  chart-6 Apps.éducation/legend collision in seconds; vision
+  missed it entirely.
 
 - **(2026-06-27, 30-day world briefing) Vision will confidently
   describe a full-width text layout as "narrow vertical column on
@@ -732,6 +911,22 @@ Thomas can re-style if he wants.
   example from the first briefing (S-1/A extraction, EU
   prospectus, 17-page output, navy+gold design — predecessor
   to the current default).
+- `references/cahier-dictees-briefing-2026-07-10.md` — worked
+  example for a French ed-tech market brief: 9 pages → 10 pages
+  fix cycle, the orphan-header bug on dense sections,
+  heading-glue CSS pattern, source pull methodology. **Iteration 3
+  (added 2026-07-10, same session)** documents the chart-level
+  label collisions Thomas flagged post-delivery: 5 of 6 charts
+  had at least one collision (chart 5 P-badges in y-tick band,
+  chart 6 Apps.éducation over the legend, chart 4 milestones
+  flush against x-tick labels). Plus the verification recipe that
+  actually caught them — the PIL pixel-band scan, since vision
+  failed repeatedly on chart-level layout. **Add this to the
+  bug → fix log:** the `break-after: avoid` on h2 alone is
+  insufficient when section content density forces an internal
+  page break — needs the bidirectional heading-glue pattern
+  (h* + p { break-before: avoid }) PLUS the section-level rule
+  (`section.spread { break-before: page }`) for dense sections.
 - `references/matplotlib-label-collision.md` — the
   side-callout table pattern for stacked bars with
   mixed-size segments, plus the chart-width overflow diagnosis
@@ -745,7 +940,10 @@ Thomas can re-style if he wants.
   apply `break-after: avoid`, `break-before: avoid`, and
   `page-break-inside: avoid` for section headers, end-strips,
   and other "glue" elements. **Companion to bug #8 and bug
-  #9 in `devops/chromium-pdf-layout-pitfalls`.**
+  #9 in `devops/chromium-pdf-layout-pitfalls`.** Note: the
+  patterns here are necessary but not sufficient for dense
+  sections — also apply the section-level `break-before: page`
+  rule when content + folio won't fit one page.
 - `scripts/audit_layout.py` — RETIRED 2026-06-27. The audit
   layer was a band-aid for fixed-height page boxes that left
   orphan halves and bottom-blank sections. With the
@@ -757,4 +955,4 @@ Thomas can re-style if he wants.
   browser. The file may still be on disk as a fossil; if you
   see other skills calling it, replace those calls with
   the `pdfinfo` + `pdfimages -list` + `pdftotext` trio.
-  Don't reintroduce the script.
+  Don't reintroduce the script.ic

@@ -7,11 +7,12 @@ description: >
   impact), not a summary. Use when the user shares a GitHub URL and says
   "take inspiration", "learn from this", "study how X does it", "extract
   patterns from Y", "what can we steal from this repo", or "improve our
-  tool by looking at how Z does it". Distinct from codebase-porting
-  (which implements INTO a real codebase) and last30days (web research,
-  not code reading). The output is a patterns report, not an implementation
-  plan — if the user later wants to implement the patterns, route to
-  codebase-porting or writing-plans.
+  tool by looking at how Z does it". Distinct from `build-spec-workflow`
+    (formerly `codebase-porting`, which implements INTO a real codebase)
+    and `last30days` (web research, not code reading). The output is a
+    patterns report, not an implementation plan — if the user later
+    wants to implement the patterns, route to `build-spec-workflow`
+    or `plan-and-execute-workflow` (formerly `writing-plans`).
 
 triggers:
   - take inspiration from
@@ -45,7 +46,7 @@ implementation plan.
   the user's work (LLM tooling, CLI tools, agent frameworks, etc.)
 
 **Do NOT use when:**
-- The user wants to implement INTO a codebase → `codebase-porting`
+- The user wants to implement INTO a codebase → `build-spec-workflow` (formerly `codebase-porting`)
 - The user wants a single-file architecture overview → lighter, ad-hoc
 - The user wants to read a specific file in isolation → just read it
 - The user wants to know "how does X work" as background, not as
@@ -263,8 +264,8 @@ implementation plan for the user's codebase. The user didn't ask for
 that. They asked for inspiration.
 
 **Fix**: deliver patterns only. If they say "now build this" or
-"implement that", route to `codebase-porting` (for "implement this
-spec") or `writing-plans` (for "plan the work").
+"implement that", route to `build-spec-workflow` (for "implement this
+spec") or `plan-and-execute-workflow` (for "plan the work").
 
 ### The "analysis is a research skill" trap
 
@@ -295,9 +296,9 @@ adapt it to the user's codebase>.
 
 ## Related Skills
 
-- `codebase-porting` — inverse direction: implement INTO a real codebase
+- `build-spec-workflow` — inverse direction: implement INTO a real codebase (codebase-porting is now a subsection)
 - `last30days` — research what people say, not what code does
-- `writing-plans` — turn a chosen pattern into a bite-sized task list
+- `plan-and-execute-workflow` — turn a chosen pattern into a bite-sized task list (writing-plans is now a subsection)
 - `notebooklm-research` — research a topic using external sources
 - `research-briefing-pdf` — produce a polished PDF report (different
   output format than this skill's markdown report)

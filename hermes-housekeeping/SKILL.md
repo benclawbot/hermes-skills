@@ -118,10 +118,13 @@ ls ~/.hermes/.hermes_env                      # preload file exists?
 
 **Do NOT run `rtk init -g` blindly** — it installs Claude Code's hook, not Hermes's. Hermes already has RTK via bash aliases; no hook install is needed. If the user says "install the hook" without specifying, ask which system.
 
-See the `tool-output-compression` skill for the full integration procedure.
+See `references/rtk-integration.md` (Path 1/2/3, hook contract, two-hook-systems pitfall) and `references/rtk-compress-plugin.md` (the working `transform_terminal_output` plugin source) for the full integration procedure.
 
 ## Reference Files
 
+- `references/rtk-integration.md` — RTK (Rust Token Killer) install + 3 integration paths (bash aliases / `transform_terminal_output` plugin / `rtk init`), hook contract gotcha, two-hook-systems pitfall. Absorbed from the former `tool-output-compression` skill (archived 2026-07-25).
+- `references/rtk-compress-plugin.md` — full source of the working `~/.hermes/plugins/rtk-compress/` plugin (filter map, safety nets, RTK CLI facts, measured 89.8% savings on 279 commands). Companion to `rtk-integration.md`.
+- `references/rtk-verification-log.md` — 2025-05-08 verification log: rtk gain output format, expected vs actual savings, gateway restart recipe. Companion to `rtk-integration.md`.
 - `references/image-gen-routing.md` — why image gen can't route through the chat LLM, Pollinations setup, and the "system dependency not met" false positive.
 - `references/error-log-triage.md` — 4-step method for finding real bugs in `~/.hermes/logs/errors.log`. Quantify by tool, categorize by error string, find the actual bugs, verify against source. 99% of "ERROR" lines are noise (security/validator/agent mistakes). Use when `hermes doctor` shows unexpected issues or the user asks "any bug fixes" / "is anything broken".
 - `references/git-pull-recovery.md` — safe stash → pull → pop sequence for a diverged `~/.hermes/hermes-agent/` checkout with uncommitted + untracked work. Use when `git status` shows "branch and origin/main have diverged" or when the user says "update hermes" / "pull latest".

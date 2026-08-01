@@ -934,6 +934,7 @@ For complete repository management (branch protection, secrets, gists, feature e
 | Handling divergent branches | `references/divergent-branch-strategy.md` — soft-reset squash when upstream changed same files; bypass nested rebase/merge conflicts |
 | **Fork-staleness watchdog** | `references/fork-staleness-watchdog.md` — fork's main drifts hundreds behind because a cron auto-commits without `git fetch`; PRs from stale forks are still valid; 5-question audit + 3-layer fix recipe |
 | **PR branch rebase after fork sync** | `references/pr-branch-rebase-after-fork-sync.md` — rebase local main → rebase PR branch onto it → force-push branch (NOT main) to fork; "diff is byte-identical when no upstream commit touched the same files" property; pre-flight "verify fork health before opening PR" |
+| **GitHub Pages + `gh api` JSON bodies** | `references/github-pages-and-gh-api.md` — enabling Pages via API (no `gh` subcommand for it), build-status polling, live verification; the `gh api -f` form-encoding trap for nested JSON and the `printf|gh api --input -` fix |
 | Check out someone's PR | `gh pr checkout N` | `git fetch origin pull/N/head:pr-N && git checkout pr-N` |
 | New repo, first PR traps | `references/new-repo-first-pr.md` — README persists trap, default branch trap, verify clean extraction |
 | Backing up a directory | `references/backup-directory-to-new-repo.md` — content-backup pattern (vs. feature extraction), `gh repo view` modal trap, hidden state files in "plain" dirs, privacy scan, README template |
@@ -953,6 +954,30 @@ gh api repos/$OWNER/$REPO/branches --jq '.[] | "\(.name)"'
 ```
 
 Don't retry the DELETE blindly — it'll keep 422'ing. Don't ignore the 422 either, in case it's a real permission error (different error body). The post-delete listing is the source of truth.
+
+### Pitfall: `gh api -f` Form-Encodes Nested JSON → Always 422
+
+`gh api -f key=value` form-encodes every field, so passing a nested object as a `-f` value sends it as a **string**, and the API rejects it with `422 Invalid input: data matches no possible input` (or `Invalid property /foo: "..." is not of type object`). This bites any API endpoint that expects a JSON object — `POST /pages`, `PUT /repos/{o}/{r}/pages` with `cname`, branch protection rules, anything with nested keys.
+
+**The trap plays out twice in one call** because the error message changes shape but is just as unhelpful:
+1. First attempt with `-f source='{"branch":"main"}'`: `422 Invalid input: data matches no possible input.`
+2. Second attempt with the right key but still as `-f`: `422 Invalid property /source: "{\"branch\":\"main\"}" is not of type object.`
+
+**Fix — pipe raw JSON via `--input -`:**
+
+```bash
+printf '%s' '{"source":{"branch":"main","path":"/"}}' \
+  | gh api --method POST \
+      -H "Accept: application/vnd.github+json" \
+      -H "Content-Type: application/json" \
+      /repos/$OWNER/$REPO/pages \
+      --input -
+```
+
+**Rules of thumb:**
+- Single scalar values (`-f title="..."`, `-f state=closed`): `-f` is fine.
+- Anything nested (`{"source":{...}}`, `{"required_status_checks":{...}}`): use `--input -` with stdin.
+- The full GitHub API for Pages (and many other endpoints) has **no `gh` subcommand** — `gh api` is the only CLI path. See `references/github-pages-and-gh-api.md` for the complete Pages enablement workflow.
 
 ### Pre-Merge: Is This PR Even Needed?
 
