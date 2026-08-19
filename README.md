@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/hermes-skills-banner.svg" alt="Hermes Skills" width="100%" />
+</p>
+
 # Hermes Skills
 
 Backup of the local Hermes Agent skills collection at `~/.hermes/skills/`.
